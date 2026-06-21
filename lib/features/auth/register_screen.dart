@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/services/storage_service.dart';
+import 'package:patient_app/core/theme/app_colors.dart';
 
 class RegisterScreen extends StatefulWidget {
   final String registerToken;
@@ -73,8 +74,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('إنشاء حساب مريض جديد'),
-        centerTitle: true,
+        title: const Text('إنشاء حساب جديد'),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -82,89 +82,185 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // ─── Welcome Header ───────────────────────────
               const Text(
-                'أهلاً بك في ScanGo',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white),
+                'أهلاً بك في سكان جو',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              Text(
-                'رقم الهاتف الذي تم التحقق منه: ${widget.phone}',
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
-                textAlign: TextAlign.center,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.check_circle, color: AppColors.primary, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'تم التحقق من: ${widget.phone}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: AppColors.primaryDark,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 32),
 
+              // ─── Error ────────────────────────────────────
               if (_errorMessage != null) ...[
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
+                    color: AppColors.errorBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
-                    textAlign: TextAlign.center,
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(color: AppColors.error, fontSize: 13),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 16),
               ],
 
+              // ─── Name Field ───────────────────────────────
+              const Text(
+                'الاسم بالكامل',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
               TextField(
                 controller: _nameController,
-                decoration: InputDecoration(
-                  labelText: 'الاسم بالكامل (مطلوب)',
-                  prefixIcon: const Icon(Icons.person_outline),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              TextField(
-                controller: _ageController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  labelText: 'العمر (اختياري)',
-                  prefixIcon: const Icon(Icons.cake_outlined),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                  hintText: 'مثال: محمد أحمد علي',
                 ),
               ),
               const SizedBox(height: 20),
 
-              const Text('الجنس:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              // ─── Age Field ────────────────────────────────
+              const Text(
+                'العمر (اختياري)',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _ageController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.cake_outlined),
+                  hintText: 'مثال: 55',
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // ─── Gender Selection ─────────────────────────
+              const Text(
+                'الجنس',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('ذكر'),
-                      value: 'male',
-                      groupValue: _gender,
-                      onChanged: (val) => setState(() => _gender = val!),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _gender = 'male'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _gender == 'male' ? AppColors.primaryLight : AppColors.surfaceVariant,
+                          border: Border.all(
+                            color: _gender == 'male' ? AppColors.primary : AppColors.border,
+                            width: _gender == 'male' ? 2 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.male_rounded,
+                              color: _gender == 'male' ? AppColors.primary : AppColors.textMuted,
+                              size: 28,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'ذكر',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: _gender == 'male' ? AppColors.primary : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
+                  const SizedBox(width: 12),
                   Expanded(
-                    child: RadioListTile<String>(
-                      title: const Text('أنثى'),
-                      value: 'female',
-                      groupValue: _gender,
-                      onChanged: (val) => setState(() => _gender = val!),
+                    child: GestureDetector(
+                      onTap: () => setState(() => _gender = 'female'),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: _gender == 'female' ? AppColors.primaryLight : AppColors.surfaceVariant,
+                          border: Border.all(
+                            color: _gender == 'female' ? AppColors.primary : AppColors.border,
+                            width: _gender == 'female' ? 2 : 1,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.female_rounded,
+                              color: _gender == 'female' ? AppColors.primary : AppColors.textMuted,
+                              size: 28,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'أنثى',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: _gender == 'female' ? AppColors.primary : AppColors.textSecondary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 32),
 
+              // ─── Submit Button ────────────────────────────
               ElevatedButton(
                 onPressed: _isLoading ? null : _handleRegister,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
                 child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('إنشاء الحساب ودخول التطبيق', style: TextStyle(fontSize: 16)),
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    : const Text('إنشاء الحساب ودخول التطبيق'),
               ),
             ],
           ),

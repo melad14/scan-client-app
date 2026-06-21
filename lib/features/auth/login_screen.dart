@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/services/storage_service.dart';
+import 'package:patient_app/core/theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -69,14 +70,12 @@ class _LoginScreenState extends State<LoginScreen> {
       if (res.statusCode == 200 && res.data['success'] == true) {
         final isNew = res.data['data']['isNewUser'] as bool;
         if (isNew) {
-          // Redirect to registration screen with verification tokens
           final regToken = res.data['data']['registerToken'];
           context.push('/register', extra: {
             'registerToken': regToken,
             'phone': phone,
           });
         } else {
-          // Existing user login
           final accessToken = res.data['data']['accessToken'];
           final refreshToken = res.data['data']['refreshToken'];
           await StorageService.saveAccessToken(accessToken);
@@ -98,90 +97,174 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'أشعتك منزلية وخدمات تحاليل',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'احجز فحوصاتك الطبية وسيقوم فني متخصص بزيارتك بالمنزل',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Colors.grey),
-              ),
-              const SizedBox(height: 48),
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const SizedBox(height: 80),
 
-              if (_errorMessage != null) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    border: Border.all(color: Colors.red.withOpacity(0.3)),
-                    borderRadius: BorderRadius.circular(12),
+                // ─── Logo Area ────────────────────────────────
+                Center(
+                  child: Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: AppColors.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Icon(
+                      Icons.medical_services_rounded,
+                      color: Colors.white,
+                      size: 36,
+                    ),
                   ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 12),
+                ),
+                const SizedBox(height: 24),
+
+                // ─── Title ────────────────────────────────────
+                const Text(
+                  'سكان جو',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryDeep,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'خدمتك الطبية — في بيتك',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: AppColors.textSecondary,
+                    height: 1.8,
+                  ),
+                ),
+                const SizedBox(height: 48),
+
+                // ─── Error Message ────────────────────────────
+                if (_errorMessage != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.errorBg,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: AppColors.error, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // ─── Phone Input ──────────────────────────────
+                if (!_otpSent) ...[
+                  const Text(
+                    'رقم الهاتف',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _phoneController,
+                    keyboardType: TextInputType.phone,
+                    textDirection: TextDirection.ltr,
+                    textAlign: TextAlign.right,
+                    decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.phone_rounded),
+                      hintText: '01012345678',
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _sendOtp,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('إرسال رمز التحقق'),
+                  ),
+                ] else ...[
+                  // ─── OTP Input ────────────────────────────────
+                  const Text(
+                    'رمز التحقق',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'تم إرسال رمز مكون من 6 أرقام إلى ${_phoneController.text}',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _otpController,
+                    keyboardType: TextInputType.number,
+                    textDirection: TextDirection.ltr,
                     textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 12,
+                      fontFamily: 'Inter',
+                    ),
+                    maxLength: 6,
+                    decoration: const InputDecoration(
+                      hintText: '------',
+                      counterText: '',
+                      prefixIcon: Icon(Icons.lock_outline_rounded),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _verifyOtp,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('التحقق وتسجيل الدخول'),
+                  ),
+                  const SizedBox(height: 12),
+                  Center(
+                    child: TextButton(
+                      onPressed: () => setState(() => _otpSent = false),
+                      child: const Text('تغيير رقم الهاتف'),
+                    ),
+                  ),
+                ],
               ],
-
-              if (!_otpSent) ...[
-                TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.phone),
-                    hintText: 'رقم الهاتف (مثال: 01012345678)',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _sendOtp,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('إرسال رمز التحقق (OTP)', style: TextStyle(fontSize: 16)),
-                ),
-              ] else ...[
-                TextField(
-                  controller: _otpController,
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    hintText: 'أدخل الرمز المكون من 6 أرقام',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: _isLoading ? null : _verifyOtp,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('التحقق وتسجيل الدخول', style: TextStyle(fontSize: 16)),
-                ),
-                TextButton(
-                  onPressed: () => setState(() => _otpSent = false),
-                  child: const Text('تغيير رقم الهاتف'),
-                ),
-              ],
-            ],
+            ),
           ),
         ),
       ),

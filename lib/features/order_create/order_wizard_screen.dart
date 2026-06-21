@@ -233,7 +233,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                       ElevatedButton(
                         onPressed: _currentStep == 9 ? _submitOrder : _nextStep,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6366F1),
+                          backgroundColor: const Color(0xFF0D9488),
                           foregroundColor: Colors.white,
                         ),
                         child: Text(_currentStep == 9 ? 'تأكيد وحجز الزيارة' : 'التالي'),
@@ -363,7 +363,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.camera_alt_outlined, size: 48, color: Colors.indigo),
+                  Icon(Icons.camera_alt_outlined, size: 48, color: Color(0xFF0D9488)),
                   SizedBox(height: 12),
                   Text('اضغط لالتقاط أو اختيار صورة الروشتة', style: TextStyle(fontSize: 11), textAlign: TextAlign.center),
                 ],
