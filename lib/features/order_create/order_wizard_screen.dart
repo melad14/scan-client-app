@@ -225,6 +225,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                       if (_currentStep > 1)
                         ElevatedButton(
                           onPressed: _prevStep,
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(120, 52),
+                          ),
                           child: const Text('السابق'),
                         )
                       else
@@ -235,6 +238,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF0D9488),
                           foregroundColor: Colors.white,
+                          minimumSize: const Size(120, 52),
                         ),
                         child: Text(_currentStep == 9 ? 'تأكيد وحجز الزيارة' : 'التالي'),
                       ),

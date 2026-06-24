@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/order.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/theme/app_colors.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -103,33 +104,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
-  String _translateStatus(String status) {
-    switch (status) {
-      case 'pending': return 'تم الاستلام وبانتظار المراجعة';
-      case 'assigned': return 'تم قبول الطلب وتعيين الفني';
-      case 'on_way': return 'الفني في طريقه لموقعك';
-      case 'arrived': return 'وصل الفني إلى موقعك';
-      case 'in_progress': return 'جاري إجراء الفحص الطبي';
-      case 'completed': return 'تم إنهاء الفحص الطبي';
-      case 'report_ready': return 'التقرير الطبي وصور الفحص جاهزة';
-      case 'cancelled': return 'تم إلغاء الطلب';
-      default: return status;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'pending': return Colors.amber;
-      case 'assigned': return Colors.indigo;
-      case 'on_way':
-      case 'arrived':
-      case 'in_progress': return Colors.blue;
-      case 'completed':
-      case 'report_ready': return Colors.green;
-      case 'cancelled': return Colors.red;
-      default: return Colors.grey;
-    }
-  }
+  // Removed hardcoded status helper methods, now using unified AppColors helpers.
 
   @override
   Widget build(BuildContext context) {
@@ -148,24 +123,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     children: [
                       // Header card status
                       Card(
-                        color: const Color(0xFF131B2E),
                         child: Padding(
                           padding: const EdgeInsets.all(20),
                           child: Column(
                             children: [
                               Text(
-                                _translateStatus(_order!.status),
+                                AppColors.getStatusLabel(_order!.status),
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: _getStatusColor(_order!.status),
+                                  color: AppColors.getStatusColor(_order!.status),
                                 ),
                                 textAlign: TextAlign.center,
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 'تاريخ الحجز: ${_order!.createdAt.year}-${_order!.createdAt.month}-${_order!.createdAt.day}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                style: const TextStyle(fontSize: 11, color: AppColors.textMuted),
                               ),
                             ],
                           ),
@@ -178,13 +152,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const Text('التقرير الطبي والنتائج:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         Card(
-                          color: const Color(0xFF131B2E),
                           child: Padding(
                             padding: const EdgeInsets.all(16.0),
                             child: Column(
                               children: [
                                 if (_order!.report!.images.isNotEmpty) ...[
-                                  const Text('صور الأشعة والفحص المتاحة:', style: TextStyle(fontSize: 13, color: Colors.grey)),
+                                  const Text('صور الأشعة والفحص المتاحة:', style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
                                   const SizedBox(height: 12),
                                   GridView.builder(
                                     shrinkWrap: true,
@@ -207,13 +180,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 ],
 
                                 if (_order!.report!.pdf != null) ...[
-                                  ElevatedButton.icon(
-                                    onPressed: () {
-                                      // Simulate PDF download/open
-                                    },
-                                    icon: const Icon(Icons.download_outlined),
-                                    label: const Text('تحميل وقراءة تقرير الـ PDF'),
-                                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: ElevatedButton.icon(
+                                      onPressed: () {
+                                        // Simulate PDF download/open
+                                      },
+                                      icon: const Icon(Icons.download_outlined),
+                                      label: const Text('تحميل وقراءة تقرير الـ PDF'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.success,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ],
@@ -228,7 +207,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const Text('الفني الطبي المعين للطلب:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         Card(
-                          color: const Color(0xFF131B2E),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(
@@ -244,12 +222,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                     children: [
                                       Text(
                                         _order!.technician!.name,
-                                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         _order!.technician!.phone,
-                                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                                       ),
                                     ],
                                   ),
@@ -258,7 +236,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                   children: [
                                     const Icon(Icons.star, color: Colors.amber, size: 16),
                                     const SizedBox(width: 4),
-                                    Text('${_order!.technician!.rating}'),
+                                    Text(
+                                      '${_order!.technician!.rating}',
+                                      style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -274,13 +255,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         const Text('تقييم أداء الفني الطبي:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                         const SizedBox(height: 12),
                         Card(
-                          color: const Color(0xFF131B2E),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                const Text('ما هو تقييمك لأداء الفني الطبي خلال زيارتك المنزلية؟', style: TextStyle(fontSize: 12)),
+                                const Text(
+                                  'ما هو تقييمك لأداء الفني الطبي خلال زيارتك المنزلية؟',
+                                  style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                                ),
                                 const SizedBox(height: 16),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
@@ -321,36 +304,40 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       const Text('سجل وتفاصيل الحركة الزمنية للطلب:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 12),
                       Card(
-                        color: const Color(0xFF131B2E),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: _order!.statusHistory.map((log) {
+                              final statusColor = AppColors.getStatusColor(log.status);
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 12.0),
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Icon(Icons.check_circle_outline, size: 16, color: Colors.green),
+                                    Icon(Icons.check_circle_outline, size: 16, color: statusColor),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            _translateStatus(log.status),
-                                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                                            AppColors.getStatusLabel(log.status),
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.textPrimary,
+                                            ),
                                           ),
                                           if (log.note != null) ...[
                                             const SizedBox(height: 2),
-                                            Text(log.note!, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                            Text(log.note!, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
                                           ],
                                         ],
                                       ),
                                     ),
                                     Text(
                                       '${log.timestamp.hour}:${log.timestamp.minute}',
-                                      style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                      style: const TextStyle(fontSize: 10, color: AppColors.textMuted, fontFamily: 'Inter'),
                                     ),
                                   ],
                                 ),
@@ -365,7 +352,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       if (_order!.status == 'pending' || _order!.status == 'assigned') ...[
                         ElevatedButton(
                           onPressed: _cancelOrder,
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withOpacity(0.1), foregroundColor: Colors.red),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.errorBg,
+                            foregroundColor: AppColors.error,
+                          ),
                           child: const Text('إلغاء طلب الفحص الطبي'),
                         ),
                       ],
