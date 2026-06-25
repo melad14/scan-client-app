@@ -1,7 +1,7 @@
 class Constants {
   // Base API URLs
-  static const String apiBaseUrl = 'http://localhost:3000/api/v1';
-  static const String socketUrl = 'http://localhost:3000';
+  static const String apiBaseUrl = 'https://scan-backend-phi.vercel.app/api/v1';
+  static const String socketUrl = 'https://scan-backend-phi.vercel.app';
 
   // ─── Patient Auth Endpoints ─────────────────────────────────────────────────
   static const String patientRegister = '/auth/patient/register';
