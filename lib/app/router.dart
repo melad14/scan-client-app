@@ -30,12 +30,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/register',
-      builder: (BuildContext context, GoRouterState state) {
-        final extra = state.extra as Map<String, dynamic>?;
-        final registerToken = extra?['registerToken'] as String? ?? '';
-        final phone = extra?['phone'] as String? ?? '';
-        return RegisterScreen(registerToken: registerToken, phone: phone);
-      },
+      builder: (BuildContext context, GoRouterState state) => const RegisterScreen(),
     ),
     GoRoute(
       path: '/',

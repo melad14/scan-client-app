@@ -13,46 +13,31 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _phoneController = TextEditingController();
-  final TextEditingController _otpController = TextEditingController();
-  bool _otpSent = false;
+  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _passwordVisible = false;
   String? _errorMessage;
 
   final _dio = Dio(BaseOptions(baseUrl: Constants.apiBaseUrl));
 
-  Future<void> _sendOtp() async {
-    final phone = _phoneController.text.trim();
-    if (phone.isEmpty || phone.length < 11) {
-      setState(() => _errorMessage = 'يرجى إدخال رقم هاتف صحيح');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final res = await _dio.post(Constants.sendOtp, data: {'phone': phone});
-      if (res.statusCode == 200) {
-        setState(() => _otpSent = true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم إرسال رمز التحقق بنجاح')),
-        );
-      }
-    } catch (e) {
-      setState(() => _errorMessage = 'فشل إرسال رمز التحقق. يرجى المحاولة لاحقاً.');
-    } finally {
-      setState(() => _isLoading = false);
-    }
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
-  Future<void> _verifyOtp() async {
-    final phone = _phoneController.text.trim();
-    final otp = _otpController.text.trim();
-    if (otp.isEmpty || otp.length < 6) {
-      setState(() => _errorMessage = 'يرجى إدخال الرمز المكون من 6 أرقام');
+  Future<void> _handleLogin() async {
+    final username = _usernameController.text.trim();
+    final password = _passwordController.text.trim();
+
+    if (username.isEmpty) {
+      setState(() => _errorMessage = 'يرجى إدخال اسم المستخدم أو البريد الإلكتروني');
+      return;
+    }
+    if (password.isEmpty || password.length < 6) {
+      setState(() => _errorMessage = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
@@ -62,34 +47,32 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final res = await _dio.post(Constants.verifyOtp, data: {
-        'phone': phone,
-        'otp': otp,
-      });
+      final res = await _dio.post(
+        Constants.patientLogin,
+        data: {
+          'username': username,
+          'password': password,
+        },
+      );
 
       if (res.statusCode == 200 && res.data['success'] == true) {
-        final isNew = res.data['data']['isNewUser'] as bool;
-        if (isNew) {
-          final regToken = res.data['data']['registerToken'];
-          context.push('/register', extra: {
-            'registerToken': regToken,
-            'phone': phone,
-          });
-        } else {
-          final accessToken = res.data['data']['accessToken'];
-          final refreshToken = res.data['data']['refreshToken'];
-          await StorageService.saveAccessToken(accessToken);
-          await StorageService.saveRefreshToken(refreshToken);
-          await StorageService.saveUserRole('patient');
-          await StorageService.saveUserData(res.data['data']['user']);
+        final accessToken = res.data['data']['accessToken'];
+        final refreshToken = res.data['data']['refreshToken'];
 
-          context.go('/');
-        }
+        await StorageService.saveAccessToken(accessToken);
+        await StorageService.saveRefreshToken(refreshToken);
+        await StorageService.saveUserRole('patient');
+        await StorageService.saveUserData(res.data['data']['user']);
+
+        if (mounted) context.go('/');
       }
-    } catch (e) {
-      setState(() => _errorMessage = 'رمز التحقق غير صحيح أو منتهي الصلاحية');
+    } on DioException catch (e) {
+      final msg = e.response?.data?['message'];
+      setState(() => _errorMessage = msg ?? 'اسم المستخدم أو كلمة المرور غير صحيحة');
+    } catch (_) {
+      setState(() => _errorMessage = 'حدث خطأ. يرجى المحاولة مرة أخرى.');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -169,100 +152,101 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 16),
                 ],
 
-                // ─── Phone Input ──────────────────────────────
-                if (!_otpSent) ...[
-                  const Text(
-                    'رقم الهاتف',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                // ─── Username / Email Field ───────────────────
+                const Text(
+                  'اسم المستخدم أو البريد الإلكتروني',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _usernameController,
+                  keyboardType: TextInputType.emailAddress,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.right,
+                  autocorrect: false,
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.person_outline_rounded),
+                    hintText: 'username أو email@example.com',
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // ─── Password Field ───────────────────────────
+                const Text(
+                  'كلمة المرور',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _passwordController,
+                  obscureText: !_passwordVisible,
+                  textDirection: TextDirection.ltr,
+                  textAlign: TextAlign.right,
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.lock_outline_rounded),
+                    hintText: '••••••••',
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _passwordVisible
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
+                      onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _phoneController,
-                    keyboardType: TextInputType.phone,
-                    textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.right,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.phone_rounded),
-                      hintText: '01012345678',
+                ),
+                const SizedBox(height: 32),
+
+                // ─── Login Button ─────────────────────────────
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _handleLogin,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('تسجيل الدخول'),
+                ),
+                const SizedBox(height: 20),
+
+                // ─── Register Link ────────────────────────────
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'ليس لديك حساب؟',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _sendOtp,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('إرسال رمز التحقق'),
-                  ),
-                ] else ...[
-                  // ─── OTP Input ────────────────────────────────
-                  const Text(
-                    'رمز التحقق',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textSecondary,
+                    TextButton(
+                      onPressed: () => context.push('/register'),
+                      child: const Text(
+                        'إنشاء حساب جديد',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'تم إرسال رمز مكون من 6 أرقام إلى ${_phoneController.text}',
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _otpController,
-                    keyboardType: TextInputType.number,
-                    textDirection: TextDirection.ltr,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 12,
-                      fontFamily: 'Inter',
-                    ),
-                    maxLength: 6,
-                    decoration: const InputDecoration(
-                      hintText: '------',
-                      counterText: '',
-                      prefixIcon: Icon(Icons.lock_outline_rounded),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _verifyOtp,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('التحقق وتسجيل الدخول'),
-                  ),
-                  const SizedBox(height: 12),
-                  Center(
-                    child: TextButton(
-                      onPressed: () => setState(() => _otpSent = false),
-                      child: const Text('تغيير رقم الهاتف'),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ],
             ),
           ),

@@ -3,18 +3,23 @@ class Constants {
   static const String apiBaseUrl = 'http://localhost:3000/api/v1';
   static const String socketUrl = 'http://localhost:3000';
 
-  // Endpoints
-  static const String sendOtp = '/auth/send-otp';
-  static const String verifyOtp = '/auth/verify-otp';
-  static const String register = '/auth/register';
-  static const String loginTech = '/auth/technician/login';
+  // ─── Patient Auth Endpoints ─────────────────────────────────────────────────
+  static const String patientRegister = '/auth/patient/register';
+  static const String patientLogin = '/auth/patient/login';
+
+  // ─── Shared Auth Endpoints ──────────────────────────────────────────────────
   static const String refreshToken = '/auth/refresh-token';
   static const String logout = '/auth/logout';
-  
+
+  // ─── Technician Auth (used by tech_app) ─────────────────────────────────────
+  static const String loginTech = '/auth/technician/login';
+
+  // ─── Patient App Endpoints ──────────────────────────────────────────────────
   static const String services = '/services';
   static const String orders = '/orders';
   static const String ordersHistory = '/orders/history';
-  
+
+  // ─── Technician App Endpoints ────────────────────────────────────────────────
   static const String techAvailableOrders = '/technician/orders/available';
   static const String techActiveOrder = '/technician/orders/active';
   static const String techOrdersHistory = '/technician/orders/history';
