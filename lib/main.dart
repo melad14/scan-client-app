@@ -8,11 +8,11 @@ import 'app/router.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Light status bar for light theme
+  // Dark status bar for dark theme
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.dark,
-    statusBarBrightness: Brightness.light,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
   ));
 
   // Connect to socket in background if enabled
@@ -32,7 +32,7 @@ class ScanGoPatientApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp.router(
       title: 'ScanGo | سكان جو',
-      theme: AppTheme.lightTheme,
+      theme: AppTheme.darkTheme,
       locale: const Locale('ar', 'EG'),
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,

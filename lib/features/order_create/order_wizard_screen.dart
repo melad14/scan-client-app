@@ -3,6 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/service.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
 
 class OrderWizardScreen extends StatefulWidget {
   final String category;
@@ -42,6 +46,11 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   final _districtController = TextEditingController();
   final _streetController = TextEditingController();
   final _buildingController = TextEditingController();
+
+  // Map and Location Picker State
+  LatLng _selectedLatLng = const LatLng(30.0444, 31.2357);
+  final MapController _mapController = MapController();
+  bool _isFetchingLocation = false;
 
   // Timing
   String _scheduleDate = 'today'; // today, tomorrow
@@ -99,6 +108,98 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     });
   }
 
+  Future<void> _reverseGeocode(LatLng latLng) async {
+    try {
+      final response = await _api.dio.get(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {
+          'format': 'json',
+          'lat': latLng.latitude,
+          'lon': latLng.longitude,
+          'accept-language': 'ar',
+        },
+        options: Options(
+          headers: {
+            'User-Agent': 'ScanGoApp/1.0',
+          },
+        ),
+      );
+      
+      if (response.statusCode == 200 && response.data != null) {
+        final address = response.data['address'];
+        if (address != null) {
+          String governorate = address['state'] ?? address['governorate'] ?? 'القاهرة';
+          governorate = governorate.replaceAll('محافظة ', '').trim();
+          
+          String district = address['city'] ?? address['town'] ?? address['suburb'] ?? address['neighbourhood'] ?? address['village'] ?? '';
+          district = district.replaceAll('قسم ', '').trim();
+          
+          String street = address['road'] ?? address['street'] ?? '';
+          final String houseNumber = address['house_number'] ?? '';
+          if (street.isEmpty) {
+            street = address['amenity'] ?? address['shop'] ?? address['tourism'] ?? '';
+          }
+          final fullStreet = street + (houseNumber.isNotEmpty ? ' $houseNumber' : '');
+          
+          setState(() {
+            _governorateController.text = governorate;
+            _districtController.text = district;
+            if (fullStreet.isNotEmpty) {
+              _streetController.text = fullStreet;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      // Fail silently
+    }
+  }
+
+  Future<void> _getCurrentLocation() async {
+    setState(() {
+      _isFetchingLocation = true;
+      _errorMessage = null;
+    });
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() => _errorMessage = 'يرجى تفعيل خدمة تحديد الموقع (GPS) في الهاتف.');
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() => _errorMessage = 'تم رفض إذن الوصول للموقع الجغرافي.');
+          return;
+        }
+      }
+      
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _errorMessage = 'إذن الموقع مرفوض نهائياً. يرجى تفعيله من إعدادات الهاتف.');
+        return;
+      }
+
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      final newLatLng = LatLng(position.latitude, position.longitude);
+      setState(() {
+        _selectedLatLng = newLatLng;
+      });
+      _mapController.move(newLatLng, 15.0);
+      _reverseGeocode(newLatLng); // Trigger reverse geocoding
+    } catch (e) {
+      setState(() => _errorMessage = 'تعذر الحصول على موقعك الحالي.');
+    } finally {
+      setState(() {
+        _isFetchingLocation = false;
+      });
+    }
+  }
+
   Future<void> _submitOrder() async {
     setState(() => _isLoading = true);
     try {
@@ -127,7 +228,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           'district': _districtController.text.trim(),
           'street': _streetController.text.trim(),
           'building': _buildingController.text.trim(),
-          'coordinates': [31.2357, 30.0444] // default Cairo coordinates
+          'coordinates': [_selectedLatLng.longitude, _selectedLatLng.latitude] // dynamic coordinates
         },
         'schedule': {
           'date': date.toIso8601String(),
@@ -157,6 +258,16 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     if (_currentStep == 1 && _selectedServiceIds.isEmpty) {
       setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل');
       return;
+    }
+    
+    if (_currentStep == 5) {
+      if (_governorateController.text.trim().isEmpty ||
+          _districtController.text.trim().isEmpty ||
+          _streetController.text.trim().isEmpty ||
+          _buildingController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'يرجى إدخال تفاصيل العنوان كاملة (المحافظة، الحي، الشارع، الطابق/الشقة)');
+        return;
+      }
     }
     
     setState(() {
@@ -427,8 +538,121 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('الخطوة 5: عنوان الزيارة المنزلية بالكامل', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const Text('الخطوة 5: حدد موقع الزيارة المنزلية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        const Text(
+          'قم بتحديد موقعك بدقة على الخريطة لتسهيل وصول الفني الطبي إليك، ثم أكمل تفاصيل العنوان بالأسفل.',
+          style: TextStyle(fontSize: 12, color: Colors.grey),
+        ),
         const SizedBox(height: 16),
+        
+        // Map Container
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 280,
+            width: double.infinity,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _selectedLatLng,
+                    initialZoom: 14.0,
+                    onTap: (tapPosition, latLng) {
+                      setState(() {
+                        _selectedLatLng = latLng;
+                      });
+                      _reverseGeocode(latLng); // Trigger reverse geocoding
+                    },
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.scango.app',
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _selectedLatLng,
+                          width: 50,
+                          height: 50,
+                          child: const Icon(
+                            Icons.location_on_rounded,
+                            color: Colors.red,
+                            size: 44,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                
+                // Locate Me Button
+                Positioned(
+                  bottom: 16,
+                  left: 16,
+                  child: InkWell(
+                    onTap: _isFetchingLocation ? null : _getCurrentLocation,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1E1B4B), // dark purple
+                        borderRadius: BorderRadius.circular(30),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.4),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                        border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.4), width: 1.5),
+                      ),
+                      child: _isFetchingLocation
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: Color(0xFF00D4AA), // teal
+                              ),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.my_location_rounded, color: Color(0xFF00D4AA), size: 18),
+                                SizedBox(width: 8),
+                                Text(
+                                  'تحديد موقعي الحالي 📍',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    fontFamily: 'Cairo',
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Center(
+          child: Text(
+            'الإحداثيات المحددة: ${_selectedLatLng.latitude.toStringAsFixed(5)}, ${_selectedLatLng.longitude.toStringAsFixed(5)}',
+            style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'Inter'),
+          ),
+        ),
+        const SizedBox(height: 24),
+        
         TextField(
           controller: _governorateController,
           decoration: const InputDecoration(labelText: 'المحافظة'),
