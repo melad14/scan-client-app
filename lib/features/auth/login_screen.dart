@@ -98,185 +98,180 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = context.isDark;
+
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.heroGradient),
-        child: SafeArea(
-          child: FadeTransition(
-            opacity: _fadeAnim,
-            child: SlideTransition(
-              position: _slideAnim,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 28),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const SizedBox(height: 60),
+      backgroundColor: c.background,
+      body: SafeArea(
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 28),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 56),
 
-                    // ─── Logo ─────────────────────────────────────
-                    Center(
-                      child: Container(
-                        width: 80,
-                        height: 80,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [AppColors.primary, AppColors.accent],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(24),
-                          boxShadow: AppColors.primaryGlow,
-                        ),
-                        child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 40),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-
-                    // ─── Title ────────────────────────────────────
-                    const Text(
-                      'سكان جو',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ShaderMask(
-                      shaderCallback: (bounds) => AppColors.primaryGradient.createShader(bounds),
-                      child: const Text(
-                        'خدماتك الطبية من باب بيتك',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    const SizedBox(height: 48),
-
-                    // ─── Form Card ───────────────────────────────
-                    Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: AppColors.cardShadow,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const Text(
-                            'تسجيل الدخول',
-                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 24),
-
-                          // ─── Error ───────────────────────────
-                          if (_errorMessage != null) ...[
-                            Container(
-                              padding: const EdgeInsets.all(14),
-                              decoration: BoxDecoration(
-                                color: AppColors.errorBg,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: AppColors.error.withOpacity(0.3)),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 20),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _errorMessage!,
-                                      style: const TextStyle(color: AppColors.error, fontSize: 13, height: 1.4),
-                                    ),
-                                  ),
-                                  GestureDetector(
-                                    onTap: () => setState(() => _errorMessage = null),
-                                    child: const Icon(Icons.close_rounded, color: AppColors.error, size: 18),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                          ],
-
-                          // ─── Username ────────────────────────
-                          _FieldLabel(label: 'اسم المستخدم'),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _usernameController,
-                            textDirection: TextDirection.ltr,
-                            textAlign: TextAlign.right,
-                            autocorrect: false,
-                            textCapitalization: TextCapitalization.none,
-                            style: const TextStyle(color: AppColors.textPrimary),
-                            decoration: const InputDecoration(
-                              prefixIcon: Icon(Icons.alternate_email_rounded),
-                              hintText: 'اسم المستخدم أو البريد الإلكتروني',
-                            ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          // ─── Password ────────────────────────
-                          _FieldLabel(label: 'كلمة المرور'),
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _passwordController,
-                            obscureText: !_passwordVisible,
-                            textDirection: TextDirection.ltr,
-                            style: const TextStyle(color: AppColors.textPrimary),
-                            onSubmitted: (_) => _handleLogin(),
-                            decoration: InputDecoration(
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
-                              hintText: '••••••••',
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                  color: AppColors.textMuted,
-                                  size: 20,
-                                ),
-                                onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 28),
-
-                          // ─── Login Button ────────────────────
-                          _GradientButton(
-                            label: 'دخول',
-                            isLoading: _isLoading,
-                            onTap: _handleLogin,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ─── Register Link ────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                  // ─── Hero Section ──────────────────────────────
+                  Center(
+                    child: Column(
                       children: [
-                        const Text(
-                          'ليس لديك حساب؟',
-                          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                        // Logo Icon
+                        Container(
+                          width: 80, height: 80,
+                          decoration: BoxDecoration(
+                            color: c.primary,
+                            borderRadius: BorderRadius.circular(24),
+                            boxShadow: c.primaryGlow,
+                          ),
+                          child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 40),
                         ),
-                        TextButton(
-                          onPressed: () => context.push('/register'),
-                          child: ShaderMask(
-                            shaderCallback: (b) => AppColors.primaryGradient.createShader(b),
-                            child: const Text(
-                              'إنشاء حساب جديد',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: Colors.white),
-                            ),
+                        const SizedBox(height: 24),
+
+                        // Brand Name
+                        Text(
+                          'سكان جو',
+                          style: TextStyle(
+                            fontSize: 30,
+                            fontWeight: FontWeight.w800,
+                            color: c.textPrimary,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Tagline
+                        Text(
+                          'خدماتك الطبية من باب بيتك',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: c.textSecondary,
+                            fontWeight: FontWeight.w500,
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 44),
+
+                  // ─── Form Card ────────────────────────────────
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: c.border),
+                      boxShadow: isDark ? [] : c.cardShadow,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          'تسجيل الدخول',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textPrimary),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+
+                        // ─── Error ────────────────────────────
+                        if (_errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: c.errorBg,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: c.error.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline_rounded, color: c.error, size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(_errorMessage!,
+                                      style: TextStyle(color: c.error, fontSize: 13, height: 1.4)),
+                                ),
+                                GestureDetector(
+                                  onTap: () => setState(() => _errorMessage = null),
+                                  child: Icon(Icons.close_rounded, color: c.error, size: 18),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                        ],
+
+                        // ─── Username ─────────────────────────
+                        _FieldLabel(label: 'اسم المستخدم', colors: c),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _usernameController,
+                          textDirection: TextDirection.ltr,
+                          textAlign: TextAlign.right,
+                          autocorrect: false,
+                          textCapitalization: TextCapitalization.none,
+                          style: TextStyle(color: c.textPrimary),
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.alternate_email_rounded),
+                            hintText: 'اسم المستخدم أو البريد الإلكتروني',
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+
+                        // ─── Password ─────────────────────────
+                        _FieldLabel(label: 'كلمة المرور', colors: c),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _passwordController,
+                          obscureText: !_passwordVisible,
+                          textDirection: TextDirection.ltr,
+                          style: TextStyle(color: c.textPrimary),
+                          onSubmitted: (_) => _handleLogin(),
+                          decoration: InputDecoration(
+                            prefixIcon: const Icon(Icons.lock_outline_rounded),
+                            hintText: '••••••••',
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                color: c.textMuted, size: 20,
+                              ),
+                              onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 28),
+
+                        // ─── Login Button (solid teal) ─────────
+                        _SolidButton(
+                          label: 'دخول',
+                          isLoading: _isLoading,
+                          primary: c.primary,
+                          onTap: _handleLogin,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // ─── Register Link ────────────────────────────
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('ليس لديك حساب؟',
+                          style: TextStyle(color: c.textSecondary, fontSize: 14)),
+                      TextButton(
+                        onPressed: () => context.push('/register'),
+                        child: Text(
+                          'إنشاء حساب جديد',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.primary),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ),
             ),
           ),
@@ -286,51 +281,58 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 }
 
-// ── Shared Widget: Field Label ──────────────────────────────────
+// ── Field Label ─────────────────────────────────────────────────
 class _FieldLabel extends StatelessWidget {
   final String label;
-  const _FieldLabel({required this.label});
+  final AppColorTokens colors;
+  const _FieldLabel({required this.label, required this.colors});
   @override
   Widget build(BuildContext context) => Text(
     label,
-    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textSecondary),
+    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textSecondary),
   );
 }
 
-// ── Shared Widget: Gradient Button ─────────────────────────────
-class _GradientButton extends StatelessWidget {
+// ── Solid Teal Button (replaces gradient button everywhere) ──────
+class _SolidButton extends StatefulWidget {
   final String label;
   final bool isLoading;
+  final Color primary;
   final VoidCallback onTap;
+  const _SolidButton({required this.label, required this.isLoading, required this.primary, required this.onTap});
+  @override State<_SolidButton> createState() => _SolidButtonState();
+}
 
-  const _GradientButton({required this.label, required this.isLoading, required this.onTap});
+class _SolidButtonState extends State<_SolidButton> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: isLoading ? null : onTap,
-      child: Container(
+      onTap: widget.isLoading ? null : widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 120),
         height: 54,
         decoration: BoxDecoration(
-          gradient: isLoading ? null : AppColors.primaryGradient,
-          color: isLoading ? AppColors.surfaceVariant : null,
+          color: widget.isLoading
+              ? widget.primary.withOpacity(0.6)
+              : _pressed ? widget.primary.withOpacity(0.85) : widget.primary,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: isLoading ? null : AppColors.primaryGlow,
+          boxShadow: widget.isLoading ? [] : [
+            BoxShadow(color: widget.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
+          ],
         ),
         child: Center(
-          child: isLoading
-              ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.primary),
-                )
+          child: widget.isLoading
+              ? const SizedBox(height: 22, width: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
               : Text(
-                  label,
+                  widget.label,
                   style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    fontFamily: 'Cairo',
+                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700, fontFamily: 'Cairo',
                   ),
                 ),
         ),

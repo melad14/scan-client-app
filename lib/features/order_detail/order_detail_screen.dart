@@ -61,9 +61,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Future<void> _cancelOrder() async {
+    final c = context.colors;
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
-      backgroundColor: AppColors.surface,
+      backgroundColor: c.surface,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) => Padding(
         padding: const EdgeInsets.all(24),
@@ -71,24 +72,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(width: 36, height: 4,
-                decoration: BoxDecoration(color: AppColors.border, borderRadius: BorderRadius.circular(2))),
+                decoration: BoxDecoration(color: c.border, borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 20),
-            const Icon(Icons.cancel_outlined, color: AppColors.error, size: 48),
+            Icon(Icons.cancel_outlined, color: c.error, size: 48),
             const SizedBox(height: 12),
-            const Text('إلغاء الطلب', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+            Text('إلغاء الطلب',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.textPrimary)),
             const SizedBox(height: 8),
-            const Text('هل أنت متأكد من إلغاء هذا الطلب؟ لا يمكن التراجع عن هذه الخطوة.',
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary), textAlign: TextAlign.center),
+            Text('هل أنت متأكد من إلغاء هذا الطلب؟ لا يمكن التراجع عن هذه الخطوة.',
+                style: TextStyle(fontSize: 13, color: c.textSecondary), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             Row(children: [
-              Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context, false), child: const Text('تراجع'))),
+              Expanded(child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context, false), child: const Text('تراجع'))),
               const SizedBox(width: 12),
               Expanded(child: GestureDetector(
                 onTap: () => Navigator.pop(context, true),
-                child: Container(height: 50,
-                    decoration: BoxDecoration(color: AppColors.error, borderRadius: BorderRadius.circular(14)),
-                    child: const Center(child: Text('إلغاء الطلب',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo')))),
+                child: Container(
+                  height: 50,
+                  decoration: BoxDecoration(color: c.error, borderRadius: BorderRadius.circular(14)),
+                  child: const Center(child: Text('إلغاء الطلب',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo'))),
+                ),
               )),
             ]),
             const SizedBox(height: 8),
@@ -137,9 +142,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   void _showSnack(String msg, {required bool success}) {
     if (!mounted) return;
+    final c = context.colors;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg, style: const TextStyle(fontFamily: 'Cairo')),
-      backgroundColor: success ? AppColors.successBg : AppColors.errorBg,
+      content: Text(msg, style: TextStyle(fontFamily: 'Cairo', color: success ? c.success : c.error)),
+      backgroundColor: success ? c.successBg : c.errorBg,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     ));
@@ -147,10 +153,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: c.background,
       appBar: AppBar(
-        backgroundColor: AppColors.surface,
         title: Text(_order?.orderNumber ?? 'تفاصيل الطلب',
             style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
         leading: IconButton(
@@ -166,8 +172,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ],
       ),
       body: RefreshIndicator(
-        color: AppColors.primary,
-        backgroundColor: AppColors.surface,
+        color: c.primary,
+        backgroundColor: c.surface,
         onRefresh: _fetchDetails,
         child: _isLoading
             ? _buildSkeleton()
@@ -179,30 +185,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildSkeleton() {
+    final c = context.colors;
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        _skeletonBox(height: 100, radius: 20),
+        _AnimatedSkeletonBox(height: 120, radius: 20, colors: c),
         const SizedBox(height: 12),
-        _skeletonBox(height: 80, radius: 16),
+        _AnimatedSkeletonBox(height: 80, radius: 16, colors: c),
         const SizedBox(height: 12),
-        _skeletonBox(height: 120, radius: 16),
+        _AnimatedSkeletonBox(height: 140, radius: 16, colors: c),
+        const SizedBox(height: 12),
+        _AnimatedSkeletonBox(height: 100, radius: 16, colors: c),
       ],
     );
   }
 
-  Widget _skeletonBox({required double height, double radius = 12}) {
-    return Container(
-      height: height,
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: AppColors.border),
-      ),
-    );
-  }
-
   Widget _buildErrorState() {
+    final c = context.colors;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(40),
@@ -211,17 +210,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           children: [
             Container(
               width: 72, height: 72,
-              decoration: BoxDecoration(color: AppColors.errorBg, borderRadius: BorderRadius.circular(20)),
-              child: const Icon(Icons.error_outline_rounded, color: AppColors.error, size: 36),
+              decoration: BoxDecoration(color: c.errorBg, borderRadius: BorderRadius.circular(20)),
+              child: Icon(Icons.error_outline_rounded, color: c.error, size: 36),
             ),
             const SizedBox(height: 16),
-            Text(_errorMessage!, style: const TextStyle(fontSize: 15, color: AppColors.textSecondary), textAlign: TextAlign.center),
+            Text(_errorMessage!,
+                style: TextStyle(fontSize: 15, color: c.textSecondary), textAlign: TextAlign.center),
             const SizedBox(height: 20),
             GestureDetector(
               onTap: _fetchDetails,
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(gradient: AppColors.primaryGradient, borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(12),
+                    boxShadow: c.primaryGlow),
                 child: const Text('إعادة المحاولة',
                     style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
               ),
@@ -233,23 +234,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildContent() {
+    final c = context.colors;
+    final isDark = context.isDark;
     final order = _order!;
     final statusColor = AppColors.getStatusColor(order.status);
-    final statusBg = AppColors.getStatusBgColor(order.status);
+    final statusBg    = AppColors.getStatusBgColor(order.status, dark: isDark);
     final statusLabel = AppColors.getStatusLabel(order.status);
 
     return ListView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [
-        // ─── Status Header ──────────────────────────────
+        // ─── Status Header ────────────────────────────────
         Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
-            color: AppColors.surface,
+            color: c.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: statusColor.withOpacity(0.3)),
-            boxShadow: AppColors.cardShadow,
+            boxShadow: isDark ? [] : c.cardShadow,
           ),
           child: Column(
             children: [
@@ -263,13 +266,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: statusColor)),
               const SizedBox(height: 4),
               Text('${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
-                  style: const TextStyle(fontSize: 12, color: AppColors.textMuted, fontFamily: 'Inter')),
+                  style: TextStyle(fontSize: 12, color: c.textMuted, fontFamily: 'Inter')),
             ],
           ),
         ),
         const SizedBox(height: 12),
 
-        // ─── Services & Price ───────────────────────────
+        // ─── Services & Price ─────────────────────────────
         _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,21 +285,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(children: [
-                      Container(width: 6, height: 6, decoration: BoxDecoration(color: AppColors.primary, shape: BoxShape.circle)),
+                      Container(width: 6, height: 6,
+                          decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle)),
                       const SizedBox(width: 8),
-                      Text(s.nameAr, style: const TextStyle(fontSize: 14, color: AppColors.textPrimary)),
+                      Text(s.nameAr,
+                          style: TextStyle(fontSize: 14, color: c.textPrimary)),
                     ]),
-                    Text('${s.price} ج.م', style: const TextStyle(fontSize: 13, color: AppColors.textSecondary, fontFamily: 'Inter')),
+                    Text('${s.price} ج.م',
+                        style: TextStyle(fontSize: 13, color: c.textSecondary, fontFamily: 'Inter')),
                   ],
                 ),
               )),
-              Container(height: 1, color: AppColors.borderLight, margin: const EdgeInsets.symmetric(vertical: 12)),
+              Container(height: 1, color: c.borderLight, margin: const EdgeInsets.symmetric(vertical: 12)),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('الإجمالي', style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+                  Text('الإجمالي',
+                      style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
                   Text('${order.pricing?['total'] ?? 0} ج.م',
-                      style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.accent, fontSize: 17, fontFamily: 'Inter')),
+                      style: TextStyle(fontWeight: FontWeight.w700, color: c.accent, fontSize: 17, fontFamily: 'Inter')),
                 ],
               ),
             ],
@@ -304,7 +311,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         const SizedBox(height: 12),
 
-        // ─── Location ───────────────────────────────────
+        // ─── Location ─────────────────────────────────────
         if (order.location != null)
           _Card(
             child: Column(
@@ -321,7 +328,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           ),
         const SizedBox(height: 12),
 
-        // ─── Technician ─────────────────────────────────
+        // ─── Technician ───────────────────────────────────
         if (order.technician != null) ...[
           _Card(
             child: Column(
@@ -341,17 +348,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(order.technician!.name,
-                            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: AppColors.textPrimary)),
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15, color: c.textPrimary)),
                         const SizedBox(height: 4),
                         Text(order.technician!.phone,
-                            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary, fontFamily: 'Inter')),
+                            style: TextStyle(fontSize: 12, color: c.textSecondary, fontFamily: 'Inter')),
                       ],
                     )),
                     Row(children: [
                       const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
                       const SizedBox(width: 4),
                       Text('${order.technician!.rating}',
-                          style: const TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Inter', color: AppColors.textPrimary)),
+                          style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Inter', color: c.textPrimary)),
                     ]),
                   ],
                 ),
@@ -361,7 +368,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           const SizedBox(height: 12),
         ],
 
-        // ─── Report ─────────────────────────────────────
+        // ─── Report ───────────────────────────────────────
         if (order.status == 'report_ready' && order.report != null) ...[
           _Card(
             child: Column(
@@ -371,7 +378,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 const SizedBox(height: 12),
                 if (order.report!.images.isNotEmpty) ...[
                   Text('الصور (${order.report!.images.length})',
-                      style: const TextStyle(fontSize: 12, color: AppColors.textMuted)),
+                      style: TextStyle(fontSize: 12, color: c.textMuted)),
                   const SizedBox(height: 8),
                   GridView.builder(
                     shrinkWrap: true,
@@ -383,8 +390,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       borderRadius: BorderRadius.circular(10),
                       child: Image.network(order.report!.images[i], fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
-                              color: AppColors.surfaceVariant,
-                              child: const Icon(Icons.broken_image_rounded, color: AppColors.textMuted))),
+                              color: c.surfaceVariant,
+                              child: Icon(Icons.broken_image_rounded, color: c.textMuted))),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -394,13 +401,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     onTap: () => _showSnack('سيتم دعم عرض PDF قريباً', success: true),
                     child: Container(
                       height: 48,
-                      decoration: BoxDecoration(color: AppColors.successBg, borderRadius: BorderRadius.circular(12)),
-                      child: const Row(
+                      decoration: BoxDecoration(
+                        color: c.successBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: c.success.withOpacity(0.3)),
+                      ),
+                      child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.download_rounded, color: AppColors.success, size: 20),
-                          SizedBox(width: 8),
-                          Text('تحميل تقرير PDF', style: TextStyle(color: AppColors.success, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
+                          Icon(Icons.download_rounded, color: c.success, size: 20),
+                          const SizedBox(width: 8),
+                          Text('تحميل تقرير PDF',
+                              style: TextStyle(color: c.success, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
                         ],
                       ),
                     ),
@@ -411,7 +423,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           const SizedBox(height: 12),
         ],
 
-        // ─── Rating ─────────────────────────────────────
+        // ─── Rating ───────────────────────────────────────
         if ((order.status == 'completed' || order.status == 'report_ready') && order.technicianRating == null) ...[
           _Card(
             child: Column(
@@ -419,8 +431,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               children: [
                 _SectionTitle(icon: Icons.star_rounded, title: 'تقييم الفني'),
                 const SizedBox(height: 12),
-                const Text('كيف كانت تجربتك مع الفني الطبي؟',
-                    style: TextStyle(fontSize: 13, color: AppColors.textSecondary)),
+                Text('كيف كانت تجربتك مع الفني الطبي؟',
+                    style: TextStyle(fontSize: 13, color: c.textSecondary)),
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -428,7 +440,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     final v = i + 1;
                     return IconButton(
                       icon: Icon(Icons.star_rounded,
-                          color: _userRating >= v ? Colors.amber : AppColors.surfaceVariant, size: 36),
+                          color: _userRating >= v ? Colors.amber : c.surfaceVariant, size: 36),
                       onPressed: () => setState(() => _userRating = v.toDouble()),
                     );
                   }),
@@ -437,7 +449,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 TextField(
                   controller: _reviewController,
                   maxLines: 2,
-                  style: const TextStyle(color: AppColors.textPrimary),
+                  style: TextStyle(color: c.textPrimary),
                   decoration: const InputDecoration(hintText: 'اكتب مراجعتك هنا...'),
                 ),
                 const SizedBox(height: 14),
@@ -446,14 +458,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   child: Container(
                     height: 48,
                     decoration: BoxDecoration(
-                      gradient: _isSubmittingRating ? null : AppColors.primaryGradient,
-                      color: _isSubmittingRating ? AppColors.surfaceVariant : null,
+                      color: _isSubmittingRating ? c.surfaceVariant : c.primary,
                       borderRadius: BorderRadius.circular(12),
+                      boxShadow: _isSubmittingRating ? [] : c.primaryGlow,
                     ),
                     child: Center(
                       child: _isSubmittingRating
-                          ? const SizedBox(height: 20, width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                          ? SizedBox(height: 20, width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: c.primary))
                           : const Text('إرسال التقييم',
                               style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
                     ),
@@ -465,7 +477,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           const SizedBox(height: 12),
         ],
 
-        // ─── Timeline ────────────────────────────────────
+        // ─── Timeline ─────────────────────────────────────
         _Card(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,7 +485,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               _SectionTitle(icon: Icons.timeline_rounded, title: 'سجل الطلب'),
               const SizedBox(height: 12),
               ...order.statusHistory.map((log) {
-                final c = AppColors.getStatusColor(log.status);
+                final sc = AppColors.getStatusColor(log.status);
+                final isLast = log == order.statusHistory.last;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 14),
                   child: Row(
@@ -481,21 +494,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     children: [
                       Column(children: [
                         Container(width: 10, height: 10,
-                            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-                        Container(width: 2, height: 24, color: AppColors.borderLight),
+                            decoration: BoxDecoration(color: sc, shape: BoxShape.circle)),
+                        if (!isLast)
+                          Container(width: 2, height: 24,
+                              color: context.colors.borderLight),
                       ]),
                       const SizedBox(width: 12),
                       Expanded(child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(AppColors.getStatusLabel(log.status),
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary)),
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
+                                  color: context.colors.textPrimary)),
                           if (log.note != null)
-                            Text(log.note!, style: const TextStyle(fontSize: 11, color: AppColors.textSecondary)),
+                            Text(log.note!,
+                                style: TextStyle(fontSize: 11, color: context.colors.textSecondary)),
                         ],
                       )),
-                      Text('${log.timestamp.hour.toString().padLeft(2, '0')}:${log.timestamp.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(fontSize: 11, color: AppColors.textMuted, fontFamily: 'Inter')),
+                      Text(
+                        '${log.timestamp.hour.toString().padLeft(2, '0')}:${log.timestamp.minute.toString().padLeft(2, '0')}',
+                        style: TextStyle(fontSize: 11, color: context.colors.textMuted, fontFamily: 'Inter'),
+                      ),
                     ],
                   ),
                 );
@@ -505,23 +524,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         ),
         const SizedBox(height: 12),
 
-        // ─── Cancel ──────────────────────────────────────
+        // ─── Cancel Button ────────────────────────────────
         if (order.status == 'pending' || order.status == 'assigned') ...[
           GestureDetector(
             onTap: _isCancelling ? null : _cancelOrder,
             child: Container(
               height: 50,
               decoration: BoxDecoration(
-                color: AppColors.errorBg,
+                color: c.errorBg,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.error.withOpacity(0.4)),
+                border: Border.all(color: c.error.withOpacity(0.4)),
               ),
               child: Center(
                 child: _isCancelling
-                    ? const SizedBox(height: 20, width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.error))
-                    : const Text('إلغاء الطلب',
-                        style: TextStyle(color: AppColors.error, fontWeight: FontWeight.w700, fontFamily: 'Cairo', fontSize: 15)),
+                    ? SizedBox(height: 20, width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: c.error))
+                    : Text('إلغاء الطلب',
+                        style: TextStyle(color: c.error, fontWeight: FontWeight.w700,
+                            fontFamily: 'Cairo', fontSize: 15)),
               ),
             ),
           ),
@@ -533,61 +553,110 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   IconData _getStatusIcon(String status) {
     switch (status) {
-      case 'pending': return Icons.hourglass_top_rounded;
-      case 'accepted': case 'assigned': return Icons.assignment_ind_rounded;
-      case 'on_way': return Icons.directions_car_rounded;
-      case 'arrived': return Icons.location_on_rounded;
-      case 'in_progress': return Icons.medical_services_rounded;
-      case 'completed': return Icons.check_circle_rounded;
-      case 'report_ready': return Icons.insert_drive_file_rounded;
-      case 'cancelled': return Icons.cancel_rounded;
-      default: return Icons.help_outline_rounded;
+      case 'pending':                     return Icons.hourglass_top_rounded;
+      case 'accepted': case 'assigned':  return Icons.assignment_ind_rounded;
+      case 'on_way':                      return Icons.directions_car_rounded;
+      case 'arrived':                     return Icons.location_on_rounded;
+      case 'in_progress':                 return Icons.medical_services_rounded;
+      case 'completed':                   return Icons.check_circle_rounded;
+      case 'report_ready':                return Icons.insert_drive_file_rounded;
+      case 'cancelled':                   return Icons.cancel_rounded;
+      default:                            return Icons.help_outline_rounded;
     }
   }
 }
 
-// ─── Shared Components ────────────────────────────────────────
+// ── Animated Skeleton Box ───────────────────────────────────────
+class _AnimatedSkeletonBox extends StatefulWidget {
+  final double height, radius;
+  final AppColorTokens colors;
+  const _AnimatedSkeletonBox({required this.height, required this.radius, required this.colors});
+  @override State<_AnimatedSkeletonBox> createState() => _AnimatedSkeletonBoxState();
+}
+
+class _AnimatedSkeletonBoxState extends State<_AnimatedSkeletonBox> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1500))..repeat();
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+  }
+
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: Color.lerp(widget.colors.skeletonBase, widget.colors.skeletonHighlight, _anim.value),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shared Card Component ────────────────────────────────────────
 class _Card extends StatelessWidget {
   final Widget child;
   const _Card({required this.child});
   @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(16),
-    decoration: BoxDecoration(
-      color: AppColors.surface,
-      borderRadius: BorderRadius.circular(20),
-      border: Border.all(color: AppColors.border),
-      boxShadow: AppColors.cardShadow,
-    ),
-    child: child,
-  );
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = context.isDark;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: c.border),
+        boxShadow: isDark ? [] : c.cardShadow,
+      ),
+      child: child,
+    );
+  }
 }
 
+// ── Section Title Component ──────────────────────────────────────
 class _SectionTitle extends StatelessWidget {
   final IconData icon;
   final String title;
   const _SectionTitle({required this.icon, required this.title});
   @override
-  Widget build(BuildContext context) => Row(children: [
-    Icon(icon, size: 16, color: AppColors.primary),
-    const SizedBox(width: 6),
-    Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
-  ]);
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Row(children: [
+      Icon(icon, size: 16, color: c.primary),
+      const SizedBox(width: 6),
+      Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.textPrimary)),
+    ]);
+  }
 }
 
+// ── Info Row Component ───────────────────────────────────────────
 class _InfoRow extends StatelessWidget {
   final String label, value;
   const _InfoRow(this.label, this.value);
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(width: 60, child: Text(label, style: const TextStyle(fontSize: 12, color: AppColors.textMuted))),
-        const SizedBox(width: 8),
-        Expanded(child: Text(value, style: const TextStyle(fontSize: 13, color: AppColors.textPrimary))),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(width: 60, child: Text(label, style: TextStyle(fontSize: 12, color: c.textMuted))),
+          const SizedBox(width: 8),
+          Expanded(child: Text(value, style: TextStyle(fontSize: 13, color: c.textPrimary))),
+        ],
+      ),
+    );
+  }
 }
