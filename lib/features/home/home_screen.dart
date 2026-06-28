@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/order.dart';
 import 'package:patient_app/core/services/storage_service.dart';
+import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/theme_provider.dart';
@@ -40,6 +41,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     _tabAnimController.forward();
     _loadUserInfo();
     _fetchOrders();
+    
+    // Register FCM Device Token for notifications
+    NotificationService.registerDeviceToken();
   }
 
   @override

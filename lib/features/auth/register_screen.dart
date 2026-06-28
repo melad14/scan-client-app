@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/services/storage_service.dart';
+import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -84,6 +85,10 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         await StorageService.saveRefreshToken(res.data['data']['refreshToken']);
         await StorageService.saveUserRole('patient');
         await StorageService.saveUserData(res.data['data']['user']);
+        
+        // Register Push Notification Token
+        await NotificationService.registerDeviceToken();
+
         if (mounted) context.go('/');
       }
     } on DioException catch (e) {

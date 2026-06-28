@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/services/socket_service.dart';
 import 'package:patient_app/core/theme/app_theme.dart';
 import 'package:patient_app/core/theme/theme_provider.dart';
@@ -8,6 +10,10 @@ import 'app/router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase & notifications
+  await Firebase.initializeApp();
+  await NotificationService.init();
 
   // Connect to socket in background if enabled
   await SocketService.connect();

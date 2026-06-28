@@ -6,8 +6,11 @@ import '../features/home/home_screen.dart';
 import '../features/order_create/order_wizard_screen.dart';
 import '../features/order_detail/order_detail_screen.dart';
 import 'package:patient_app/core/services/storage_service.dart';
+import 'package:patient_app/core/services/notification_service.dart';
 
 final GoRouter appRouter = GoRouter(
+  // Wire the global navigator key so NotificationService can navigate
+  navigatorKey: notificationNavigatorKey,
   initialLocation: '/',
   redirect: (BuildContext context, GoRouterState state) async {
     final token = await StorageService.getAccessToken();
