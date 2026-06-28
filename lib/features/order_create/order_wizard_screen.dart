@@ -7,6 +7,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
+import 'package:patient_app/core/theme/app_colors.dart';
 
 class OrderWizardScreen extends StatefulWidget {
   final String category;
@@ -46,6 +47,16 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   final _districtController = TextEditingController();
   final _streetController = TextEditingController();
   final _buildingController = TextEditingController();
+  
+  // Detailed Location info
+  final _houseNumberController = TextEditingController();
+  final _roadController = TextEditingController();
+  final _neighbourhoodController = TextEditingController();
+  final _suburbController = TextEditingController();
+  final _cityController = TextEditingController();
+  final _postcodeController = TextEditingController();
+  final _countryController = TextEditingController();
+  String _countryCode = 'eg';
 
   // Map and Location Picker State
   LatLng _selectedLatLng = const LatLng(30.0444, 31.2357);
@@ -127,22 +138,48 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       
       if (response.statusCode == 200 && response.data != null) {
         final address = response.data['address'];
+        
+        // Print the geocoding API output to the debug console
+        debugPrint('=== Nominatim Reverse Geocode Result ===');
+        debugPrint(response.data.toString());
+        debugPrint('=======================================');
+
         if (address != null) {
-          String governorate = address['state'] ?? address['governorate'] ?? 'القاهرة';
-          governorate = governorate.replaceAll('محافظة ', '').trim();
-          
-          String district = address['city'] ?? address['town'] ?? address['suburb'] ?? address['neighbourhood'] ?? address['village'] ?? '';
-          district = district.replaceAll('قسم ', '').trim();
-          
-          String street = address['road'] ?? address['street'] ?? '';
           final String houseNumber = address['house_number'] ?? '';
+          final String road = address['road'] ?? address['street'] ?? '';
+          final String neighbourhood = address['neighbourhood'] ?? '';
+          final String suburb = address['suburb'] ?? address['quarter'] ?? '';
+          final String city = address['city'] ?? address['town'] ?? '';
+          final String state = address['state'] ?? address['governorate'] ?? 'القاهرة';
+          final String postcode = address['postcode'] ?? '';
+          final String country = address['country'] ?? 'مصر';
+          final String countryCode = address['country_code'] ?? 'eg';
+
+          // Improve district accuracy: check suburb -> neighbourhood -> quarter -> town -> city
+          String district = address['suburb'] ?? address['neighbourhood'] ?? address['quarter'] ?? address['city_district'] ?? address['town'] ?? address['city'] ?? '';
+          district = district.replaceAll('قسم ', '').trim();
+          if (district.isEmpty) district = 'القاهرة';
+
+          String governorate = state.replaceAll('محافظة ', '').trim();
+
+          String street = road;
           if (street.isEmpty) {
             street = address['amenity'] ?? address['shop'] ?? address['tourism'] ?? '';
           }
           final fullStreet = street + (houseNumber.isNotEmpty ? ' $houseNumber' : '');
           
           setState(() {
+            _houseNumberController.text = houseNumber;
+            _roadController.text = road;
+            _neighbourhoodController.text = neighbourhood;
+            _suburbController.text = suburb;
+            _cityController.text = city;
             _governorateController.text = governorate;
+            _postcodeController.text = postcode;
+            _countryController.text = country;
+            _countryCode = countryCode;
+
+            // Keep legacy inputs populated for compatibility
             _districtController.text = district;
             if (fullStreet.isNotEmpty) {
               _streetController.text = fullStreet;
@@ -228,6 +265,14 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           'district': _districtController.text.trim(),
           'street': _streetController.text.trim(),
           'building': _buildingController.text.trim(),
+          'houseNumber': _houseNumberController.text.trim(),
+          'road': _roadController.text.trim(),
+          'neighbourhood': _neighbourhoodController.text.trim(),
+          'suburb': _suburbController.text.trim(),
+          'city': _cityController.text.trim(),
+          'postcode': _postcodeController.text.trim(),
+          'country': _countryController.text.trim(),
+          'countryCode': _countryCode,
           'coordinates': [_selectedLatLng.longitude, _selectedLatLng.latitude] // dynamic coordinates
         },
         'schedule': {
@@ -258,6 +303,28 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     if (_currentStep == 1 && _selectedServiceIds.isEmpty) {
       setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل');
       return;
+    }
+    
+    if (_currentStep == 2) {
+      if (_patientNameController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'يرجى إدخال اسم المريض بالكامل');
+        return;
+      }
+      if (_patientPhoneController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'يرجى إدخال رقم هاتف المريض للتواصل');
+        return;
+      }
+      if (_patientAgeController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'يرجى إدخال عمر المريض');
+        return;
+      }
+    }
+    
+    if (_currentStep == 4) {
+      if (_weightController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'يرجى إدخال الوزن التقريبي للمريض');
+        return;
+      }
     }
     
     if (_currentStep == 5) {
@@ -411,19 +478,19 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         const SizedBox(height: 16),
         TextField(
           controller: _patientNameController,
-          decoration: const InputDecoration(labelText: 'اسم المريض بالكامل'),
+          decoration: const InputDecoration(labelText: 'اسم المريض بالكامل *'),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _patientPhoneController,
           keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(labelText: 'رقم هاتف المريض للتواصل'),
+          decoration: const InputDecoration(labelText: 'رقم هاتف المريض للتواصل *'),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _patientAgeController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'عمر المريض'),
+          decoration: const InputDecoration(labelText: 'عمر المريض *'),
         ),
         const SizedBox(height: 16),
         const Text('الجنس:'),
@@ -511,7 +578,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         TextField(
           controller: _weightController,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'الوزن التقريبي للمريض (كجم)'),
+          decoration: const InputDecoration(labelText: 'الوزن التقريبي للمريض (كجم) *'),
         ),
         const SizedBox(height: 16),
         TextField(
@@ -659,18 +726,64 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         ),
         const SizedBox(height: 16),
         TextField(
+          controller: _cityController,
+          decoration: const InputDecoration(labelText: 'المدينة'),
+        ),
+        const SizedBox(height: 16),
+        TextField(
           controller: _districtController,
-          decoration: const InputDecoration(labelText: 'الحي / المنطقة (مثال: Heliopolis)'),
+          decoration: const InputDecoration(labelText: 'الحي / المنطقة (مثال: شبرا)'),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _neighbourhoodController,
+          decoration: const InputDecoration(labelText: 'المجاورة / الشياخة (neighbourhood)'),
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _streetController,
-          decoration: const InputDecoration(labelText: 'الشارع ورقم البناية'),
+          decoration: const InputDecoration(labelText: 'الشارع ورقم البناية (كامل)'),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _roadController,
+                decoration: const InputDecoration(labelText: 'اسم الشارع / الطريق'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _houseNumberController,
+                decoration: const InputDecoration(labelText: 'رقم المبنى / البناية'),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         TextField(
           controller: _buildingController,
           decoration: const InputDecoration(labelText: 'رقم الطابق أو الشقة بالتفصيل'),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _postcodeController,
+                decoration: const InputDecoration(labelText: 'الرمز البريدي'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _countryController,
+                decoration: const InputDecoration(labelText: 'البلد'),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -745,6 +858,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   }
 
   Widget _buildPricingRow(String title, String value, {bool isTotal = false}) {
+    final c = context.colors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -753,7 +867,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           style: TextStyle(
             fontSize: isTotal ? 16 : 14,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            color: isTotal ? Colors.green : Colors.white,
+            color: isTotal ? c.textPrimary : c.textSecondary,
           ),
         ),
         Text(
@@ -761,7 +875,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           style: TextStyle(
             fontSize: isTotal ? 18 : 14,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            color: isTotal ? Colors.green : Colors.white,
+            color: isTotal ? c.success : c.textPrimary,
           ),
         ),
       ],
@@ -822,7 +936,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         const Divider(height: 32),
         Text(
           'قيمة الفاتورة النهائية: $_grandTotal ج.م',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.colors.success),
           textAlign: TextAlign.center,
         ),
       ],
@@ -841,6 +955,13 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     _districtController.dispose();
     _streetController.dispose();
     _buildingController.dispose();
+    _houseNumberController.dispose();
+    _roadController.dispose();
+    _neighbourhoodController.dispose();
+    _suburbController.dispose();
+    _cityController.dispose();
+    _postcodeController.dispose();
+    _countryController.dispose();
     super.dispose();
   }
 }
