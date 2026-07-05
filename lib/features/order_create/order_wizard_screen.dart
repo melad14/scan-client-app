@@ -128,6 +128,8 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           'lat': latLng.latitude,
           'lon': latLng.longitude,
           'accept-language': 'ar',
+          'zoom': '18',
+          'addressdetails': '1',
         },
         options: Options(
           headers: {
@@ -155,8 +157,8 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           final String country = address['country'] ?? 'مصر';
           final String countryCode = address['country_code'] ?? 'eg';
 
-          // Improve district accuracy: check suburb -> neighbourhood -> quarter -> town -> city
-          String district = address['suburb'] ?? address['neighbourhood'] ?? address['quarter'] ?? address['city_district'] ?? address['town'] ?? address['city'] ?? '';
+          // Improve district accuracy: city_district first (e.g. شبرا in Cairo), then suburb, neighbourhood, etc.
+          String district = address['city_district'] ?? address['suburb'] ?? address['neighbourhood'] ?? address['quarter'] ?? address['town'] ?? address['city'] ?? '';
           district = district.replaceAll('قسم ', '').trim();
           if (district.isEmpty) district = 'القاهرة';
 

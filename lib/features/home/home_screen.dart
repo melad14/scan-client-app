@@ -9,6 +9,7 @@ import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/theme_provider.dart';
+import 'package:patient_app/features/profile/profile_screen.dart';
 import 'package:dio/dio.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -151,7 +152,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
         bottomNavigationBar: _buildBottomNav(),
         body: FadeTransition(
           opacity: _tabFade,
-          child: _currentTab == 0 ? _buildHomeTab() : _buildHistoryTab(),
+          child: _currentTab == 0
+              ? _buildHomeTab()
+              : _currentTab == 1
+                  ? _buildHistoryTab()
+                  : const ProfileScreen(),
         ),
       ),
     );
@@ -179,6 +184,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'الرئيسية'),
           BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'طلباتي'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'حسابي'),
         ],
       ),
     );

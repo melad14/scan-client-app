@@ -5,6 +5,7 @@ import '../features/auth/register_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/order_create/order_wizard_screen.dart';
 import '../features/order_detail/order_detail_screen.dart';
+import '../features/profile/profile_screen.dart';
 import 'package:patient_app/core/services/storage_service.dart';
 import 'package:patient_app/core/services/notification_service.dart';
 
@@ -52,6 +53,10 @@ final GoRouter appRouter = GoRouter(
         final orderId = state.pathParameters['orderId']!;
         return OrderDetailScreen(orderId: orderId);
       },
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (BuildContext context, GoRouterState state) => const ProfileScreen(),
     ),
   ],
 );

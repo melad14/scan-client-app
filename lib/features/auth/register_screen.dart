@@ -17,9 +17,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   final TextEditingController _usernameController       = TextEditingController();
   final TextEditingController _nameController           = TextEditingController();
   final TextEditingController _emailController          = TextEditingController();
+  final TextEditingController _phoneController          = TextEditingController();
+  final TextEditingController _ageController            = TextEditingController();
   final TextEditingController _passwordController       = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
 
+  String _selectedGender = 'male';
   bool _isLoading = false;
   bool _passwordVisible = false;
   bool _confirmPasswordVisible = false;
@@ -48,6 +51,8 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     _usernameController.dispose();
     _nameController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
+    _ageController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
@@ -60,6 +65,8 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     final username = _usernameController.text.trim();
     final name     = _nameController.text.trim();
     final email    = _emailController.text.trim();
+    final phone    = _phoneController.text.trim();
+    final age      = _ageController.text.trim();
     final password = _passwordController.text.trim();
     final confirm  = _confirmPasswordController.text.trim();
 
@@ -67,6 +74,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     if (!_isValidUsername(username))           { setState(() => _errorMessage = 'اسم المستخدم: حروف وأرقام فقط، 3 أحرف كحد أدنى'); return; }
     if (name.isEmpty)                          { setState(() => _errorMessage = 'الاسم بالكامل مطلوب'); return; }
     if (email.isEmpty || !_isValidEmail(email)){ setState(() => _errorMessage = 'يرجى إدخال بريد إلكتروني صحيح'); return; }
+    if (phone.isEmpty)                         { setState(() => _errorMessage = 'رقم الهاتف مطلوب'); return; }
+    if (age.isEmpty)                           { setState(() => _errorMessage = 'العمر مطلوب'); return; }
+    if (int.tryParse(age) == null)             { setState(() => _errorMessage = 'يرجى إدخال عمر صحيح'); return; }
     if (password.length < 6)                   { setState(() => _errorMessage = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
     if (password != confirm)                   { setState(() => _errorMessage = 'كلمتا المرور غير متطابقتين'); return; }
 
@@ -77,6 +87,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         'username': username,
         'name':     name,
         'email':    email,
+        'phone':    phone,
+        'age':      int.parse(age),
+        'gender':   _selectedGender,
         'password': password,
       });
 
@@ -219,6 +232,57 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       _buildField('البريد الإلكتروني', Icons.email_outlined, _emailController,
                           hint: 'example@email.com', ltr: true,
                           keyboardType: TextInputType.emailAddress, colors: c),
+                      const SizedBox(height: 16),
+
+                      _buildField('رقم الهاتف', Icons.phone_outlined, _phoneController,
+                          hint: 'مثال: 01012345678', ltr: true,
+                          keyboardType: TextInputType.phone, colors: c),
+                      const SizedBox(height: 16),
+
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 1,
+                            child: _buildField('العمر', Icons.cake_outlined, _ageController,
+                                hint: 'مثال: 25', ltr: true,
+                                keyboardType: TextInputType.number, colors: c),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            flex: 1,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('الجنس', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.textSecondary)),
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: c.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: c.border),
+                                  ),
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String>(
+                                      value: _selectedGender,
+                                      isExpanded: true,
+                                      dropdownColor: c.surfaceElevated,
+                                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: c.textPrimary),
+                                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: c.textMuted),
+                                      onChanged: (v) { if (v != null) setState(() => _selectedGender = v); },
+                                      items: const [
+                                        DropdownMenuItem(value: 'male', child: Text('ذكر')),
+                                        DropdownMenuItem(value: 'female', child: Text('أنثى')),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 16),
 
                       _buildPasswordField('كلمة المرور', _passwordController, _passwordVisible,
