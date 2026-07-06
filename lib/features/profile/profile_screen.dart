@@ -260,6 +260,84 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             _InfoRow(icon: Icons.calendar_today_rounded, label: 'عضو منذ', value: memberSince),
           ]),
 
+          const SizedBox(height: 20),
+
+          // ── Section: Saved Profiles ────────────────────
+          _sectionTitle(c, 'الملفات المحفوظة لتسهيل الحجز', Icons.bookmark_outline_rounded),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: c.border),
+              boxShadow: isDark ? [] : c.cardShadow,
+            ),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: () => context.push('/profile/patients'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: c.primaryLight, borderRadius: BorderRadius.circular(12)),
+                          child: Icon(Icons.people_alt_rounded, color: c.primary, size: 18),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('المرضى المحفوظون', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.textPrimary, fontFamily: 'Cairo')),
+                              const SizedBox(height: 3),
+                              Text('أفراد العائلة وسجلهم الصحي السريع', style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded, color: c.textMuted, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Container(height: 1, color: c.borderLight),
+                ),
+                GestureDetector(
+                  onTap: () => context.push('/profile/addresses'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: c.primaryLight, borderRadius: BorderRadius.circular(12)),
+                          child: Icon(Icons.pin_drop_rounded, color: c.primary, size: 18),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('العناوين المحفوظة', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.textPrimary, fontFamily: 'Cairo')),
+                              const SizedBox(height: 3),
+                              Text('عناوين الزيارات المنزلية المفضلة', style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded, color: c.textMuted, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           const SizedBox(height: 32),
 
           // ── Logout Button ─────────────────────────────────

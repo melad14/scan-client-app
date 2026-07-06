@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/service.dart';
+import 'package:patient_app/core/models/saved_patient.dart';
+import 'package:patient_app/core/models/saved_address.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -27,41 +29,25 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   List<MedicalService> _servicesCatalog = [];
   final List<String> _selectedServiceIds = [];
 
-  // Patient Info
-  final _patientNameController = TextEditingController();
-  final _patientPhoneController = TextEditingController();
-  final _patientAgeController = TextEditingController();
-  String _patientGender = 'male';
+  // Saved Patients & Addresses lists
+  List<SavedPatient> _savedPatientsList = [];
+  List<SavedAddress> _savedAddressesList = [];
 
-  // Case Details
+  // Selections
+  SavedPatient? _selectedPatient;
+  SavedAddress? _selectedAddress;
+
+  // Temporary overrides for manual or conditional case details
   bool _isBedridden = false;
   bool _canMove = true;
-  String _locationType = 'home';
   final _weightController = TextEditingController();
   final _floorController = TextEditingController();
   bool _hasElevator = false;
   final _notesController = TextEditingController();
 
-  // Location details
-  final _governorateController = TextEditingController(text: 'القاهرة');
-  final _districtController = TextEditingController();
-  final _streetController = TextEditingController();
-  final _buildingController = TextEditingController();
-  
-  // Detailed Location info
-  final _houseNumberController = TextEditingController();
-  final _roadController = TextEditingController();
-  final _neighbourhoodController = TextEditingController();
-  final _suburbController = TextEditingController();
-  final _cityController = TextEditingController();
-  final _postcodeController = TextEditingController();
-  final _countryController = TextEditingController();
-  String _countryCode = 'eg';
-
-  // Map and Location Picker State
-  LatLng _selectedLatLng = const LatLng(30.0444, 31.2357);
-  final MapController _mapController = MapController();
-  bool _isFetchingLocation = false;
+  // Simulated prescription upload state
+  bool _hasPrescription = false;
+  String? _prescriptionFilename;
 
   // Timing
   String _scheduleDate = 'today'; // today, tomorrow
@@ -79,25 +65,80 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchServices();
+    _fetchInitialData();
   }
 
-  Future<void> _fetchServices() async {
+  Future<void> _fetchInitialData() async {
     setState(() => _isLoading = true);
     try {
-      final endpoint = widget.category == 'xray' ? '/services/xray' : '/services/lab';
-      final res = await _api.dio.get(endpoint);
-      if (res.statusCode == 200) {
-        final List list = res.data['data'] ?? [];
+      // 1. Fetch services catalog
+      final catalogEndpoint = widget.category == 'xray' ? '/services/xray' : '/services/lab';
+      final catalogRes = await _api.dio.get(catalogEndpoint);
+      
+      // 2. Fetch saved patients
+      final patientsRes = await _api.dio.get(Constants.savedPatients);
+      
+      // 3. Fetch saved addresses
+      final addressesRes = await _api.dio.get(Constants.savedAddresses);
+
+      if (mounted) {
+        final List serviceList = catalogRes.data['data'] ?? [];
+        final List patientList = patientsRes.data['data'] ?? [];
+        final List addressList = addressesRes.data['data'] ?? [];
+
         setState(() {
-          _servicesCatalog = list.map((item) => MedicalService.fromJson(item)).toList();
+          _servicesCatalog = serviceList.map((item) => MedicalService.fromJson(item)).toList();
+          _savedPatientsList = patientList.map((item) => SavedPatient.fromJson(item)).toList();
+          _savedAddressesList = addressList.map((item) => SavedAddress.fromJson(item)).toList();
+
+          // Auto-select default patient
+          if (_savedPatientsList.isNotEmpty) {
+            _selectedPatient = _savedPatientsList.firstWhere(
+              (p) => p.isDefault,
+              orElse: () => _savedPatientsList.first,
+            );
+            _applyPatientDefaults(_selectedPatient!);
+          }
+
+          // Auto-select default address
+          if (_savedAddressesList.isNotEmpty) {
+            _selectedAddress = _savedAddressesList.firstWhere(
+              (a) => a.isDefault,
+              orElse: () => _savedAddressesList.first,
+            );
+            _applyAddressDefaults(_selectedAddress!);
+          }
         });
       }
     } catch (e) {
-      setState(() => _errorMessage = 'فشل تحميل قائمة الفحوصات الطبية');
+      setState(() => _errorMessage = 'فشل تحميل بيانات الحجز الأساسية');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _applyPatientDefaults(SavedPatient p) {
+    setState(() {
+      _isBedridden = p.caseDefaults?['isBedridden'] ?? false;
+      _canMove = p.caseDefaults?['canMove'] ?? true;
+      if (p.caseDefaults?['weight'] != null) {
+        _weightController.text = p.caseDefaults!['weight'].toString();
+      } else {
+        _weightController.clear();
+      }
+      _notesController.text = p.caseDefaults?['notes'] ?? '';
+    });
+  }
+
+  void _applyAddressDefaults(SavedAddress a) {
+    setState(() {
+      if (a.floor != null) {
+        _floorController.text = a.floor.toString();
+      } else {
+        _floorController.clear();
+      }
+      _hasElevator = a.hasElevator;
+    });
   }
 
   void _calculatePriceDetails() {
@@ -107,7 +148,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       servicesSum += s.price;
     }
     
-    // Surcharges simulation based on configuration rules
+    // Simulate pricing parameters
     double transfer = 100.0;
     double emergency = _isEmergency ? 150.0 : 0.0;
 
@@ -119,127 +160,12 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     });
   }
 
-  Future<void> _reverseGeocode(LatLng latLng) async {
-    try {
-      final response = await _api.dio.get(
-        'https://nominatim.openstreetmap.org/reverse',
-        queryParameters: {
-          'format': 'json',
-          'lat': latLng.latitude,
-          'lon': latLng.longitude,
-          'accept-language': 'ar',
-          'zoom': '18',
-          'addressdetails': '1',
-        },
-        options: Options(
-          headers: {
-            'User-Agent': 'ScanGoApp/1.0',
-          },
-        ),
-      );
-      
-      if (response.statusCode == 200 && response.data != null) {
-        final address = response.data['address'];
-        
-        // Print the geocoding API output to the debug console
-        debugPrint('=== Nominatim Reverse Geocode Result ===');
-        debugPrint(response.data.toString());
-        debugPrint('=======================================');
-
-        if (address != null) {
-          final String houseNumber = address['house_number'] ?? '';
-          final String road = address['road'] ?? address['street'] ?? '';
-          final String neighbourhood = address['neighbourhood'] ?? '';
-          final String suburb = address['suburb'] ?? address['quarter'] ?? '';
-          final String city = address['city'] ?? address['town'] ?? '';
-          final String state = address['state'] ?? address['governorate'] ?? 'القاهرة';
-          final String postcode = address['postcode'] ?? '';
-          final String country = address['country'] ?? 'مصر';
-          final String countryCode = address['country_code'] ?? 'eg';
-
-          // Improve district accuracy: city_district first (e.g. شبرا in Cairo), then suburb, neighbourhood, etc.
-          String district = address['city_district'] ?? address['suburb'] ?? address['neighbourhood'] ?? address['quarter'] ?? address['town'] ?? address['city'] ?? '';
-          district = district.replaceAll('قسم ', '').trim();
-          if (district.isEmpty) district = 'القاهرة';
-
-          String governorate = state.replaceAll('محافظة ', '').trim();
-
-          String street = road;
-          if (street.isEmpty) {
-            street = address['amenity'] ?? address['shop'] ?? address['tourism'] ?? '';
-          }
-          final fullStreet = street + (houseNumber.isNotEmpty ? ' $houseNumber' : '');
-          
-          setState(() {
-            _houseNumberController.text = houseNumber;
-            _roadController.text = road;
-            _neighbourhoodController.text = neighbourhood;
-            _suburbController.text = suburb;
-            _cityController.text = city;
-            _governorateController.text = governorate;
-            _postcodeController.text = postcode;
-            _countryController.text = country;
-            _countryCode = countryCode;
-
-            // Keep legacy inputs populated for compatibility
-            _districtController.text = district;
-            if (fullStreet.isNotEmpty) {
-              _streetController.text = fullStreet;
-            }
-          });
-        }
-      }
-    } catch (e) {
-      // Fail silently
-    }
-  }
-
-  Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isFetchingLocation = true;
-      _errorMessage = null;
-    });
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() => _errorMessage = 'يرجى تفعيل خدمة تحديد الموقع (GPS) في الهاتف.');
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() => _errorMessage = 'تم رفض إذن الوصول للموقع الجغرافي.');
-          return;
-        }
-      }
-      
-      if (permission == LocationPermission.deniedForever) {
-        setState(() => _errorMessage = 'إذن الموقع مرفوض نهائياً. يرجى تفعيله من إعدادات الهاتف.');
-        return;
-      }
-
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      final newLatLng = LatLng(position.latitude, position.longitude);
-      setState(() {
-        _selectedLatLng = newLatLng;
-      });
-      _mapController.move(newLatLng, 15.0);
-      _reverseGeocode(newLatLng); // Trigger reverse geocoding
-    } catch (e) {
-      setState(() => _errorMessage = 'تعذر الحصول على موقعك الحالي.');
-    } finally {
-      setState(() {
-        _isFetchingLocation = false;
-      });
-    }
-  }
-
   Future<void> _submitOrder() async {
+    if (_selectedPatient == null || _selectedAddress == null) {
+      setState(() => _errorMessage = 'يرجى اختيار المريض وموقع الزيارة');
+      return;
+    }
+
     setState(() => _isLoading = true);
     try {
       final date = _scheduleDate == 'today'
@@ -249,33 +175,33 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       final payload = {
         'serviceCategory': widget.category,
         'serviceIds': _selectedServiceIds,
-        'patientName': _patientNameController.text.trim(),
-        'patientPhone': _patientPhoneController.text.trim(),
-        'patientAge': int.tryParse(_patientAgeController.text.trim()),
-        'patientGender': _patientGender,
+        'patientName': _selectedPatient!.name,
+        'patientPhone': _selectedPatient!.phone,
+        'patientAge': _selectedPatient!.age,
+        'patientGender': _selectedPatient!.gender,
         'caseDetails': {
           'isBedridden': _isBedridden,
           'canMove': _canMove,
-          'locationType': _locationType,
+          'locationType': 'home',
           'weight': double.tryParse(_weightController.text.trim()),
           'floor': int.tryParse(_floorController.text.trim()),
           'hasElevator': _hasElevator,
           'notes': _notesController.text.trim(),
         },
         'location': {
-          'governorate': _governorateController.text.trim(),
-          'district': _districtController.text.trim(),
-          'street': _streetController.text.trim(),
-          'building': _buildingController.text.trim(),
-          'houseNumber': _houseNumberController.text.trim(),
-          'road': _roadController.text.trim(),
-          'neighbourhood': _neighbourhoodController.text.trim(),
-          'suburb': _suburbController.text.trim(),
-          'city': _cityController.text.trim(),
-          'postcode': _postcodeController.text.trim(),
-          'country': _countryController.text.trim(),
-          'countryCode': _countryCode,
-          'coordinates': [_selectedLatLng.longitude, _selectedLatLng.latitude] // dynamic coordinates
+          'governorate': _selectedAddress!.governorate,
+          'district': _selectedAddress!.district,
+          'street': _selectedAddress!.street,
+          'building': _selectedAddress!.building,
+          'houseNumber': _selectedAddress!.houseNumber,
+          'road': _selectedAddress!.road,
+          'neighbourhood': _selectedAddress!.neighbourhood,
+          'suburb': _selectedAddress!.suburb,
+          'city': _selectedAddress!.city,
+          'postcode': _selectedAddress!.postcode,
+          'country': _selectedAddress!.country,
+          'countryCode': _selectedAddress!.countryCode,
+          'coordinates': [_selectedAddress!.lng ?? 31.2357, _selectedAddress!.lat ?? 30.0444]
         },
         'schedule': {
           'date': date.toIso8601String(),
@@ -291,59 +217,46 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('تم تسجيل الطلب وإرساله للإدارة بنجاح!')),
         );
-        // Redirect to detail timeline tracking
         context.go('/orders/$orderId');
       }
     } catch (e) {
       setState(() => _errorMessage = 'فشل تسجيل الطلب. يرجى مراجعة البيانات المدخلة.');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _nextStep() {
-    if (_currentStep == 1 && _selectedServiceIds.isEmpty) {
-      setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل');
-      return;
+    setState(() => _errorMessage = null);
+
+    if (_currentStep == 1) {
+      if (_selectedPatient == null) {
+        setState(() => _errorMessage = 'يرجى تحديد مريض لتنفيذ الفحص له');
+        return;
+      }
+      if (_selectedAddress == null) {
+        setState(() => _errorMessage = 'يرجى تحديد عنوان الزيارة المنزلية');
+        return;
+      }
+      if (widget.category == 'xray' && _weightController.text.trim().isEmpty) {
+        setState(() => _errorMessage = 'يرجى إدخال الوزن التقريبي للمريض لتجهيز معدات الأشعة');
+        return;
+      }
     }
     
     if (_currentStep == 2) {
-      if (_patientNameController.text.trim().isEmpty) {
-        setState(() => _errorMessage = 'يرجى إدخال اسم المريض بالكامل');
-        return;
-      }
-      if (_patientPhoneController.text.trim().isEmpty) {
-        setState(() => _errorMessage = 'يرجى إدخال رقم هاتف المريض للتواصل');
-        return;
-      }
-      if (_patientAgeController.text.trim().isEmpty) {
-        setState(() => _errorMessage = 'يرجى إدخال عمر المريض');
-        return;
-      }
-    }
-    
-    if (_currentStep == 4) {
-      if (_weightController.text.trim().isEmpty) {
-        setState(() => _errorMessage = 'يرجى إدخال الوزن التقريبي للمريض');
-        return;
-      }
-    }
-    
-    if (_currentStep == 5) {
-      if (_governorateController.text.trim().isEmpty ||
-          _districtController.text.trim().isEmpty ||
-          _streetController.text.trim().isEmpty ||
-          _buildingController.text.trim().isEmpty) {
-        setState(() => _errorMessage = 'يرجى إدخال تفاصيل العنوان كاملة (المحافظة، الحي، الشارع، الطابق/الشقة)');
+      if (_selectedServiceIds.isEmpty) {
+        setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل');
         return;
       }
     }
     
     setState(() {
-      _errorMessage = null;
-      if (_currentStep < 9) {
+      if (_currentStep < 4) {
         _currentStep++;
-        if (_currentStep == 7) _calculatePriceDetails();
+        if (_currentStep == 4) {
+          _calculatePriceDetails();
+        }
       }
     });
   }
@@ -355,72 +268,431 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     });
   }
 
+  void _showAddPatientSheet() {
+    final c = context.colors;
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final ageController = TextEditingController();
+    String gender = 'male';
+    String relationship = 'spouse';
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('إضافة مريض جديد للفحص', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      decoration: const InputDecoration(labelText: 'اسم المريض بالكامل *'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: phoneController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(labelText: 'رقم الهاتف للتواصل *'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: ageController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'العمر *'),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: relationship,
+                      decoration: const InputDecoration(labelText: 'صلة القرابة *'),
+                      items: const [
+                        DropdownMenuItem(value: 'spouse', child: Text('الزوج / الزوجة')),
+                        DropdownMenuItem(value: 'parent', child: Text('الأب / الأم')),
+                        DropdownMenuItem(value: 'child', child: Text('الابن / الابنة')),
+                        DropdownMenuItem(value: 'sibling', child: Text('الأخ / الأخت')),
+                        DropdownMenuItem(value: 'other', child: Text('قريب / آخر')),
+                      ],
+                      onChanged: (val) => setModalState(() => relationship = val!),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('ذكر'),
+                            value: 'male',
+                            groupValue: gender,
+                            activeColor: c.primary,
+                            onChanged: (val) => setModalState(() => gender = val!),
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('أنثى'),
+                            value: 'female',
+                            groupValue: gender,
+                            activeColor: c.primary,
+                            onChanged: (val) => setModalState(() => gender = val!),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white),
+                      onPressed: () async {
+                        if (nameController.text.trim().isEmpty ||
+                            phoneController.text.trim().isEmpty ||
+                            ageController.text.trim().isEmpty) {
+                          return;
+                        }
+                        
+                        Navigator.pop(context);
+                        setState(() => _isLoading = true);
+                        try {
+                          final payload = {
+                            'label': nameController.text.trim().split(' ').first,
+                            'name': nameController.text.trim(),
+                            'phone': phoneController.text.trim(),
+                            'age': int.parse(ageController.text.trim()),
+                            'gender': gender,
+                            'relationship': relationship
+                          };
+                          final res = await _api.dio.post(Constants.savedPatients, data: payload);
+                          if (res.statusCode == 201) {
+                            final newPatient = SavedPatient.fromJson(res.data['data']);
+                            final patientsRes = await _api.dio.get(Constants.savedPatients);
+                            final List patientList = patientsRes.data['data'] ?? [];
+                            
+                            setState(() {
+                              _savedPatientsList = patientList.map((item) => SavedPatient.fromJson(item)).toList();
+                              _selectedPatient = _savedPatientsList.firstWhere((p) => p.id == newPatient.id, orElse: () => newPatient);
+                              _applyPatientDefaults(_selectedPatient!);
+                            });
+                          }
+                        } catch (_) {}
+                        setState(() => _isLoading = false);
+                      },
+                      child: const Text('إضافة المريض'),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAddAddressSheet() {
+    final c = context.colors;
+    final labelController = TextEditingController();
+    final districtController = TextEditingController();
+    final streetController = TextEditingController();
+    final buildingController = TextEditingController();
+    final floorController = TextEditingController();
+    bool hasElevator = false;
+
+    LatLng mapLatLng = const LatLng(30.0444, 31.2357);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: c.background,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            
+            Future<void> detectLocation() async {
+              try {
+                final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+                setModalState(() {
+                  mapLatLng = LatLng(position.latitude, position.longitude);
+                });
+                
+                final response = await _api.dio.get(
+                  'https://nominatim.openstreetmap.org/reverse',
+                  queryParameters: {
+                    'format': 'json',
+                    'lat': mapLatLng.latitude,
+                    'lon': mapLatLng.longitude,
+                    'accept-language': 'ar',
+                    'zoom': '18',
+                    'addressdetails': '1',
+                  },
+                  options: Options(headers: {'User-Agent': 'ScanGoApp/1.0'}),
+                );
+                
+                if (response.statusCode == 200 && response.data != null) {
+                  final addr = response.data['address'];
+                  if (addr != null && mounted) {
+                    setModalState(() {
+                      String detectedDistrict = addr['city_district'] ?? addr['suburb'] ?? addr['neighbourhood'] ?? addr['quarter'] ?? '';
+                      detectedDistrict = detectedDistrict.replaceAll('قسم ', '').trim();
+                      districtController.text = detectedDistrict;
+                      streetController.text = addr['road'] ?? addr['street'] ?? '';
+                    });
+                  }
+                }
+              } catch (_) {}
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('إضافة عنوان زيارة جديد', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: SizedBox(
+                        height: 160,
+                        child: Stack(
+                          children: [
+                            FlutterMap(
+                              options: MapOptions(
+                                initialCenter: mapLatLng,
+                                initialZoom: 14.0,
+                                onTap: (pos, latLng) {
+                                  setModalState(() => mapLatLng = latLng);
+                                },
+                              ),
+                              children: [
+                                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                                MarkerLayer(
+                                  markers: [
+                                    Marker(point: mapLatLng, child: const Icon(Icons.location_on_rounded, color: Colors.red, size: 36)),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            Positioned(
+                              bottom: 8,
+                              left: 8,
+                              child: GestureDetector(
+                                onTap: detectLocation,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(color: c.primaryDeep, borderRadius: BorderRadius.circular(20)),
+                                  child: const Text('تحديد موقعي', style: TextStyle(color: Colors.white, fontSize: 10)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: labelController,
+                      decoration: const InputDecoration(labelText: 'تسمية العنوان (البيت، الشغل...) *'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: districtController,
+                      decoration: const InputDecoration(labelText: 'المنطقة / الحي *'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: streetController,
+                      decoration: const InputDecoration(labelText: 'الشارع والبناية بالتفصيل *'),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: buildingController,
+                            decoration: const InputDecoration(labelText: 'رقم الشقة'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            controller: floorController,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(labelText: 'الطابق'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SwitchListTile(
+                      title: const Text('يوجد مصعد'),
+                      value: hasElevator,
+                      activeColor: c.primary,
+                      onChanged: (val) => setModalState(() => hasElevator = val),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white),
+                      onPressed: () async {
+                        if (labelController.text.trim().isEmpty ||
+                            districtController.text.trim().isEmpty ||
+                            streetController.text.trim().isEmpty) {
+                          return;
+                        }
+                        Navigator.pop(context);
+                        setState(() => _isLoading = true);
+                        try {
+                          final payload = {
+                            'label': labelController.text.trim(),
+                            'district': districtController.text.trim(),
+                            'street': streetController.text.trim(),
+                            'building': buildingController.text.trim(),
+                            'floor': int.tryParse(floorController.text.trim()),
+                            'hasElevator': hasElevator,
+                            'coordinates': [mapLatLng.longitude, mapLatLng.latitude]
+                          };
+                          final res = await _api.dio.post(Constants.savedAddresses, data: payload);
+                          if (res.statusCode == 201) {
+                            final newAddress = SavedAddress.fromJson(res.data['data']);
+                            final addressesRes = await _api.dio.get(Constants.savedAddresses);
+                            final List addressList = addressesRes.data['data'] ?? [];
+                            
+                            setState(() {
+                              _savedAddressesList = addressList.map((item) => SavedAddress.fromJson(item)).toList();
+                              _selectedAddress = _savedAddressesList.firstWhere((a) => a.id == newAddress.id, orElse: () => newAddress);
+                              _applyAddressDefaults(_selectedAddress!);
+                            });
+                          }
+                        } catch (_) {}
+                        setState(() => _isLoading = false);
+                      },
+                      child: const Text('إضافة العنوان'),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final c = context.colors;
+
     return Scaffold(
+      backgroundColor: c.background,
       appBar: AppBar(
-        title: Text('خطوة $_currentStep من 9: حجز خدمة'),
+        backgroundColor: c.surface,
+        title: Text(
+          'خطوة $_currentStep من 4: حجز ${_getCategoryName()}',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: c.textPrimary),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   // Step indicator bar
-                  LinearProgressIndicator(value: _currentStep / 9.0),
-                  const SizedBox(height: 24),
+                  LinearProgressIndicator(
+                    value: _currentStep / 4.0,
+                    color: c.primary,
+                    backgroundColor: c.borderLight,
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  const SizedBox(height: 20),
 
                   if (_errorMessage != null) ...[
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.red.withOpacity(0.1),
-                        border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        color: c.errorBg,
+                        border: Border.all(color: c.error.withOpacity(0.3)),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         _errorMessage!,
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        style: TextStyle(color: c.error, fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold),
                         textAlign: TextAlign.center,
                       ),
                     ),
                     const SizedBox(height: 16),
                   ],
 
-                  // Step View Router
+                  // Render correct step view
                   Expanded(
                     child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
                       child: _buildStepView(),
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   
-                  // Wizard Nav actions
+                  // Bottom actions bar
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       if (_currentStep > 1)
-                        ElevatedButton(
+                        OutlinedButton(
                           onPressed: _prevStep,
-                          style: ElevatedButton.styleFrom(
+                          style: OutlinedButton.styleFrom(
                             minimumSize: const Size(120, 52),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            side: BorderSide(color: c.border),
                           ),
-                          child: const Text('السابق'),
+                          child: Text('السابق', style: TextStyle(fontFamily: 'Cairo', color: c.textPrimary, fontWeight: FontWeight.bold)),
                         )
                       else
                         const SizedBox(),
                       
                       ElevatedButton(
-                        onPressed: _currentStep == 9 ? _submitOrder : _nextStep,
+                        onPressed: _currentStep == 4 ? _submitOrder : _nextStep,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D9488),
+                          backgroundColor: c.primary,
                           foregroundColor: Colors.white,
-                          minimumSize: const Size(120, 52),
+                          minimumSize: const Size(140, 52),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 2,
                         ),
-                        child: Text(_currentStep == 9 ? 'تأكيد وحجز الزيارة' : 'التالي'),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              _currentStep == 4 ? 'تأكيد وحجز الزيارة' : 'التالي',
+                              style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(_currentStep == 4 ? Icons.check_circle_outline : Icons.arrow_forward, size: 16),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -430,126 +702,366 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     );
   }
 
+  String _getCategoryName() {
+    return widget.category == 'xray' ? 'أشعة منزلية' : 'تحاليل طبية';
+  }
+
   Widget _buildStepView() {
     switch (_currentStep) {
-      case 1: return _buildStep1SelectServices();
-      case 2: return _buildStep2PatientDetails();
-      case 3: return _buildStep3PrescriptionPhoto();
-      case 4: return _buildStep4CaseDetails();
-      case 5: return _buildStep5LocationSelector();
-      case 6: return _buildStep6TimingSlot();
-      case 7: return _buildStep7PricingSummary();
-      case 8: return _buildStep8PaymentChoice();
-      case 9: return _buildStep9VerificationConfirm();
-      default: return const SizedBox();
+      case 1:
+        return _buildStep1WhoAndWhere();
+      case 2:
+        return _buildStep2WhatServices();
+      case 3:
+        return _buildStep3WhenTiming();
+      case 4:
+        return _buildStep4ConfirmAndPay();
+      default:
+        return const SizedBox();
     }
   }
 
-  Widget _buildStep1SelectServices() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('الخطوة 1: اختر الفحوصات المطلوبة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        ..._servicesCatalog.map((service) {
-          final isChecked = _selectedServiceIds.contains(service.id);
-          return CheckboxListTile(
-            title: Text(service.nameAr),
-            subtitle: Text('${service.price} ج.م - ${service.description}'),
-            value: isChecked,
-            onChanged: (val) {
-              setState(() {
-                if (val == true) {
-                  _selectedServiceIds.add(service.id);
-                } else {
-                  _selectedServiceIds.remove(service.id);
-                }
-              });
-            },
-          );
-        }),
-      ],
-    );
-  }
+  // ────────────────────────────────────────────────────────────────────────────
+  //  STEP 1: WHO & WHERE
+  // ────────────────────────────────────────────────────────────────────────────
+  Widget _buildStep1WhoAndWhere() {
+    final c = context.colors;
 
-  Widget _buildStep2PatientDetails() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('الخطوة 2: بيانات المريض', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _patientNameController,
-          decoration: const InputDecoration(labelText: 'اسم المريض بالكامل *'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _patientPhoneController,
-          keyboardType: TextInputType.phone,
-          decoration: const InputDecoration(labelText: 'رقم هاتف المريض للتواصل *'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _patientAgeController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'عمر المريض *'),
-        ),
-        const SizedBox(height: 16),
-        const Text('الجنس:'),
         Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text('ذكر'),
-                value: 'male',
-                groupValue: _patientGender,
-                onChanged: (val) => setState(() => _patientGender = val!),
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text('أنثى'),
-                value: 'female',
-                groupValue: _patientGender,
-                onChanged: (val) => setState(() => _patientGender = val!),
-              ),
+            Text('من المريض؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+            TextButton.icon(
+              onPressed: _showAddPatientSheet,
+              icon: Icon(Icons.add, size: 16, color: c.primary),
+              label: Text('مريض جديد', style: TextStyle(fontFamily: 'Cairo', color: c.primary, fontWeight: FontWeight.bold, fontSize: 13)),
             ),
           ],
         ),
+        const SizedBox(height: 10),
+        
+        // Patients horizontal cards
+        if (_savedPatientsList.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: c.accent, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'لا يوجد مرضى محفوظون. اضغط على "+ مريض جديد" للبدء.',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: c.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          SizedBox(
+            height: 110,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              itemCount: _savedPatientsList.length,
+              itemBuilder: (context, index) {
+                final p = _savedPatientsList[index];
+                final isSelected = _selectedPatient?.id == p.id;
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedPatient = p;
+                      _applyPatientDefaults(p);
+                    });
+                  },
+                  child: Container(
+                    width: 160,
+                    margin: const EdgeInsets.only(left: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: c.surface,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected ? c.primary : c.borderLight,
+                        width: isSelected ? 2 : 1,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                p.label,
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: isSelected ? c.primary : c.textPrimary, fontFamily: 'Cairo'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (isSelected) Icon(Icons.check_circle, size: 16, color: c.primary),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(p.name, style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 4),
+                        Text('${p.age} سنة · ${p.gender == 'male' ? 'ذكر' : 'أنثى'}', style: TextStyle(fontSize: 11, color: c.textMuted, fontFamily: 'Cairo')),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        
+        const SizedBox(height: 24),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('أين موقع الزيارة؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+            TextButton.icon(
+              onPressed: _showAddAddressSheet,
+              icon: Icon(Icons.add, size: 16, color: c.primary),
+              label: Text('عنوان جديد', style: TextStyle(fontFamily: 'Cairo', color: c.primary, fontWeight: FontWeight.bold, fontSize: 13)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+
+        // Addresses vertical cards
+        if (_savedAddressesList.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: c.accent, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'لا يوجد عناوين محفوظة. اضغط على "+ عنوان جديد" لإضافة عنوان للبدء.',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: c.textSecondary),
+                  ),
+                ),
+              ],
+            ),
+          )
+        else
+          ..._savedAddressesList.map((a) {
+            final isSelected = _selectedAddress?.id == a.id;
+            IconData iconData = Icons.home_rounded;
+            if (a.icon == 'work') iconData = Icons.work_rounded;
+            if (a.icon == 'hospital') iconData = Icons.local_hospital_rounded;
+            if (a.icon == 'family') iconData = Icons.family_restroom_rounded;
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedAddress = a;
+                  _applyAddressDefaults(a);
+                });
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isSelected ? c.primary : c.borderLight,
+                    width: isSelected ? 2 : 1,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40, height: 40,
+                      decoration: BoxDecoration(color: c.primaryLight, borderRadius: BorderRadius.circular(12)),
+                      child: Icon(iconData, color: c.primary, size: 18),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(a.label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+                          const SizedBox(height: 3),
+                          Text(a.shortAddress, style: TextStyle(fontSize: 12, color: c.textSecondary, fontFamily: 'Cairo'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ],
+                      ),
+                    ),
+                    if (isSelected) Icon(Icons.check_circle, color: c.primary, size: 20),
+                  ],
+                ),
+              ),
+            );
+          }),
+
+        const Divider(height: 32),
+
+        // Case parameters conditional display (only for Portable X-Ray, which needs building details and logistics prep)
+        if (widget.category == 'xray') ...[
+          Text('تفاصيل الحالة ومعدات النقل للسرير (أشعة فقط)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            title: const Text('المريض ملازم للفراش (Bedridden)', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+            subtitle: const Text('لتنبيه الفني لجلب مساند السرير المخصصة', style: TextStyle(fontFamily: 'Cairo', fontSize: 11)),
+            value: _isBedridden,
+            activeColor: c.primary,
+            onChanged: (val) => setState(() => _isBedridden = val),
+          ),
+          SwitchListTile(
+            title: const Text('قادر على الوقوف الخفيف', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+            value: _canMove,
+            activeColor: c.primary,
+            onChanged: (val) => setState(() => _canMove = val),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _weightController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'الوزن التقريبي (كجم) *'),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextField(
+                  controller: _floorController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'رقم الطابق السكني'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            title: const Text('يوجد مصعد بناية (Elevator)', style: TextStyle(fontFamily: 'Cairo', fontSize: 13)),
+            value: _hasElevator,
+            activeColor: c.primary,
+            onChanged: (val) => setState(() => _hasElevator = val),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notesController,
+            maxLines: 2,
+            decoration: const InputDecoration(labelText: 'ملاحظات طبية وتوجيهات خاصة للفني'),
+          ),
+        ] else ...[
+          // For Lab Category, only show general notes (no need for elevator/weight/floor details)
+          Text('ملاحظات خاصة (تحاليل)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _notesController,
+            maxLines: 2,
+            decoration: const InputDecoration(labelText: 'هل المريض صائم؟ أو أي ملاحظات للتحاليل...'),
+          ),
+        ]
       ],
     );
   }
 
-  Widget _buildStep3PrescriptionPhoto() {
+  // ────────────────────────────────────────────────────────────────────────────
+  //  STEP 2: WHAT (Services Selection + Prescription Photo)
+  // ────────────────────────────────────────────────────────────────────────────
+  Widget _buildStep2WhatServices() {
+    final c = context.colors;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('الخطوة 3: صورة الروشتة (اختياري)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text('اختر الفحوصات الطبية المطلوبة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        const SizedBox(height: 12),
+        
+        ..._servicesCatalog.map((service) {
+          final isChecked = _selectedServiceIds.contains(service.id);
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            decoration: BoxDecoration(
+              color: c.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isChecked ? c.primary : c.borderLight),
+            ),
+            child: CheckboxListTile(
+              title: Text(service.nameAr, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+              subtitle: Text('${service.price} ج.م · ${service.description ?? ""}', style: TextStyle(fontFamily: 'Cairo', color: c.textSecondary, fontSize: 12)),
+              value: isChecked,
+              activeColor: c.primary,
+              onChanged: (val) {
+                setState(() {
+                  if (val == true) {
+                    _selectedServiceIds.add(service.id);
+                  } else {
+                    _selectedServiceIds.remove(service.id);
+                  }
+                });
+              },
+            ),
+          );
+        }),
+
+        const Divider(height: 36),
+
+        Text('إرفاق صورة الروشتة (اختياري)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        const SizedBox(height: 8),
+        Text(
+          'تساعد صورة الروشتة الطبية الفني على جلب المستلزمات الطبية الصحيحة والتجهيز الطبي المسبق للحالة.',
+          style: TextStyle(color: c.textSecondary, fontSize: 12, fontFamily: 'Cairo'),
+        ),
         const SizedBox(height: 16),
-        const Text('إرفاق صورة الروشتة يساعد الفني في مراجعة وتجهيز المستلزمات الطبية المطلوبة قبل الزيارة.'),
-        const SizedBox(height: 32),
+        
         Center(
-          child: InkWell(
+          child: GestureDetector(
             onTap: () {
-              // Simulate uploading prescription photo
+              setState(() {
+                _hasPrescription = true;
+                _prescriptionFilename = 'prescription_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}.jpg';
+              });
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تم محاكاة إرفاق صورة الروشتة بنجاح')),
+                SnackBar(content: Text('تم إرفاق الملف $_prescriptionFilename بنجاح!')),
               );
             },
             child: Container(
-              width: 200,
-              height: 200,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                border: Border.all(color: Colors.white.withOpacity(0.1)),
+                color: c.surface,
                 borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _hasPrescription ? c.primary : c.border, style: BorderStyle.solid),
               ),
-              child: const Column(
+              child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.camera_alt_outlined, size: 48, color: Color(0xFF0D9488)),
-                  SizedBox(height: 12),
-                  Text('اضغط لالتقاط أو اختيار صورة الروشتة', style: TextStyle(fontSize: 11), textAlign: TextAlign.center),
+                  Icon(
+                    _hasPrescription ? Icons.file_present_rounded : Icons.camera_alt_outlined,
+                    size: 40,
+                    color: _hasPrescription ? c.primary : c.textSecondary,
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _hasPrescription ? _prescriptionFilename! : 'اضغط لالتقاط أو إرفاق صورة الروشتة',
+                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: _hasPrescription ? c.primary : c.textSecondary, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_hasPrescription) ...[
+                    const SizedBox(height: 6),
+                    GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _hasPrescription = false;
+                          _prescriptionFilename = null;
+                        });
+                      },
+                      child: const Text('حذف وإعادة إرفاق', style: TextStyle(color: Colors.red, fontSize: 11, fontFamily: 'Cairo')),
+                    )
+                  ]
                 ],
               ),
             ),
@@ -559,302 +1071,277 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     );
   }
 
-  Widget _buildStep4CaseDetails() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('الخطوة 4: طبيعة الحالة الطبية للتحضير', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        SwitchListTile(
-          title: const Text('المريض ملازم للفراش (Bedridden)'),
-          subtitle: const Text('فحوصات الأشعة تستدعي تحضيرات خاصة بالسرير للـ Bedridden'),
-          value: _isBedridden,
-          onChanged: (val) => setState(() => _isBedridden = val),
-        ),
-        SwitchListTile(
-          title: const Text('قادر على الحركة الخفيفة'),
-          value: _canMove,
-          onChanged: (val) => setState(() => _canMove = val),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _weightController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'الوزن التقريبي للمريض (كجم) *'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _floorController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'رقم الطابق السكني'),
-        ),
-        SwitchListTile(
-          title: const Text('يوجد مصعد بناية (Elevator)'),
-          value: _hasElevator,
-          onChanged: (val) => setState(() => _hasElevator = val),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _notesController,
-          maxLines: 2,
-          decoration: const InputDecoration(labelText: 'ملاحظات وتوجيهات للفني الطبي'),
-        ),
-      ],
-    );
-  }
+  // ────────────────────────────────────────────────────────────────────────────
+  //  STEP 3: WHEN (Timing and Date Selection)
+  // ────────────────────────────────────────────────────────────────────────────
+  Widget _buildStep3WhenTiming() {
+    final c = context.colors;
 
-  Widget _buildStep5LocationSelector() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('الخطوة 5: حدد موقع الزيارة المنزلية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 8),
-        const Text(
-          'قم بتحديد موقعك بدقة على الخريطة لتسهيل وصول الفني الطبي إليك، ثم أكمل تفاصيل العنوان بالأسفل.',
-          style: TextStyle(fontSize: 12, color: Colors.grey),
-        ),
+        Text('متى ترغب في زيارة الفني الطبي؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
         const SizedBox(height: 16),
         
-        // Map Container
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            height: 280,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _scheduleDate = 'today'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: _scheduleDate == 'today' ? c.primaryLight : c.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _scheduleDate == 'today' ? c.primary : c.borderLight, width: 1.5),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.calendar_today_rounded, color: _scheduleDate == 'today' ? c.primary : c.textSecondary),
+                      const SizedBox(height: 8),
+                      Text('زيارة اليوم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _scheduleDate == 'today' ? c.primary : c.textPrimary)),
+                    ],
+                  ),
+                ),
+              ),
             ),
-            child: Stack(
+            const SizedBox(width: 16),
+            Expanded(
+              child: GestureDetector(
+                onTap: () => setState(() => _scheduleDate = 'tomorrow'),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: _scheduleDate == 'tomorrow' ? c.primaryLight : c.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _scheduleDate == 'tomorrow' ? c.primary : c.borderLight, width: 1.5),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.event_repeat_rounded, color: _scheduleDate == 'tomorrow' ? c.primary : c.textSecondary),
+                      const SizedBox(height: 8),
+                      Text('زيارة غداً', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _scheduleDate == 'tomorrow' ? c.primary : c.textPrimary)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        const SizedBox(height: 24),
+        
+        Text('اختر الفترة المفضلة للزيارة:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        const SizedBox(height: 12),
+
+        // Visual selectors for time slots
+        _buildTimeSlotCard('morning_9_12', 'الفترة الصباحية', 'من 9:00 ص إلى 12:00 م', Icons.wb_sunny_outlined),
+        _buildTimeSlotCard('afternoon_12_3', 'فترة الظهيرة', 'من 12:00 م إلى 3:00 م', Icons.wb_cloudy_outlined),
+        _buildTimeSlotCard('evening_3_6', 'الفترة المسائية', 'من 3:00 م إلى 6:00 م', Icons.nights_stay_outlined),
+
+        const Divider(height: 36),
+
+        // Emergency surcharge toggle
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: _isEmergency ? c.warningBg.withOpacity(0.08) : c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _isEmergency ? c.warning : c.borderLight),
+          ),
+          child: SwitchListTile(
+            title: Row(
               children: [
-                FlutterMap(
-                  mapController: _mapController,
-                  options: MapOptions(
-                    initialCenter: _selectedLatLng,
-                    initialZoom: 14.0,
-                    onTap: (tapPosition, latLng) {
-                      setState(() {
-                        _selectedLatLng = latLng;
-                      });
-                      _reverseGeocode(latLng); // Trigger reverse geocoding
-                    },
-                  ),
-                  children: [
-                    TileLayer(
-                      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                      userAgentPackageName: 'com.scango.app',
-                    ),
-                    MarkerLayer(
-                      markers: [
-                        Marker(
-                          point: _selectedLatLng,
-                          width: 50,
-                          height: 50,
-                          child: const Icon(
-                            Icons.location_on_rounded,
-                            color: Colors.red,
-                            size: 44,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                
-                // Locate Me Button
-                Positioned(
-                  bottom: 16,
-                  left: 16,
-                  child: InkWell(
-                    onTap: _isFetchingLocation ? null : _getCurrentLocation,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E1B4B), // dark purple
-                        borderRadius: BorderRadius.circular(30),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.4),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          )
-                        ],
-                        border: Border.all(color: const Color(0xFF6C63FF).withOpacity(0.4), width: 1.5),
-                      ),
-                      child: _isFetchingLocation
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Color(0xFF00D4AA), // teal
-                              ),
-                            )
-                          : Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: const [
-                                Icon(Icons.my_location_rounded, color: Color(0xFF00D4AA), size: 18),
-                                SizedBox(width: 8),
-                                Text(
-                                  'تحديد موقعي الحالي 📍',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    fontFamily: 'Cairo',
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                ),
+                Icon(Icons.bolt, color: _isEmergency ? c.warning : c.textSecondary),
+                const SizedBox(width: 8),
+                const Text('زيارة طوارئ عاجلة جداً ⚡', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             ),
+            subtitle: const Text(
+              'سعر الخدمة يزداد بمقدار 150 ج.م، ويتم توجيه أقرب فني إليك فوراً في غضون ساعة.',
+              style: TextStyle(fontFamily: 'Cairo', fontSize: 11),
+            ),
+            value: _isEmergency,
+            activeColor: c.warning,
+            onChanged: (val) {
+              setState(() => _isEmergency = val);
+            },
           ),
         ),
-        const SizedBox(height: 8),
-        Center(
-          child: Text(
-            'الإحداثيات المحددة: ${_selectedLatLng.latitude.toStringAsFixed(5)}, ${_selectedLatLng.longitude.toStringAsFixed(5)}',
-            style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'Inter'),
+      ],
+    );
+  }
+
+  Widget _buildTimeSlotCard(String key, String title, String description, IconData icon) {
+    final c = context.colors;
+    final isSelected = _timeSlot == key;
+
+    return GestureDetector(
+      onTap: () => setState(() => _timeSlot = key),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? c.primaryLight : c.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isSelected ? c.primary : c.borderLight, width: 1.5),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? c.primary : c.textSecondary, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+                  const SizedBox(height: 2),
+                  Text(description, style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
+                ],
+              ),
+            ),
+            if (isSelected) Icon(Icons.check_circle, color: c.primary, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  //  STEP 4: CONFIRMATION & BILLING DETAIL
+  // ────────────────────────────────────────────────────────────────────────────
+  Widget _buildStep4ConfirmAndPay() {
+    final c = context.colors;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('مراجعة وتأكيد الحجز الطبي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        const SizedBox(height: 16),
+        
+        // Summary Card
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: c.borderLight),
+          ),
+          child: Column(
+            children: [
+              _buildSummaryRow(
+                Icons.person_pin,
+                'المريض:',
+                _selectedPatient?.name ?? 'غير محدد',
+                sub: 'العلاقة: ${_selectedPatient != null ? _selectedPatient!.label : ""}',
+              ),
+              const Divider(height: 20),
+              _buildSummaryRow(
+                Icons.location_on_outlined,
+                'موقع الفحص:',
+                _selectedAddress?.shortAddress ?? 'غير محدد',
+                sub: _selectedAddress?.label ?? '',
+              ),
+              const Divider(height: 20),
+              _buildSummaryRow(
+                Icons.healing_outlined,
+                'الفحوصات المطلوبة:',
+                _servicesCatalog
+                    .where((s) => _selectedServiceIds.contains(s.id))
+                    .map((s) => s.nameAr)
+                    .join(', '),
+              ),
+              const Divider(height: 20),
+              _buildSummaryRow(
+                Icons.access_time_rounded,
+                'موعد الزيارة:',
+                '${_scheduleDate == 'today' ? 'اليوم' : 'غداً'} - ${_timeSlot == 'morning_9_12' ? 'الصباحية' : _timeSlot == 'afternoon_12_3' ? 'الظهر' : 'المسائية'}',
+                sub: _isEmergency ? 'زيارة طوارئ عاجلة ⚡' : null,
+              ),
+            ],
           ),
         ),
+
         const SizedBox(height: 24),
         
-        TextField(
-          controller: _governorateController,
-          decoration: const InputDecoration(labelText: 'المحافظة'),
+        Text('تفاصيل الفاتورة الرسمية', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        const SizedBox(height: 12),
+
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: c.borderLight),
+          ),
+          child: Column(
+            children: [
+              _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', '$_servicesTotal ج.م'),
+              const SizedBox(height: 8),
+              _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '$_transferFee ج.م'),
+              if (_isEmergency) ...[
+                const SizedBox(height: 8),
+                _buildPricingRow('رسوم خدمة طوارئ إضافية:', '$_emergencyFee ج.م'),
+              ],
+              const Divider(height: 24, thickness: 1),
+              _buildPricingRow('إجمالي رسوم الدفع المستحقة:', '$_grandTotal ج.م', isTotal: true),
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _cityController,
-          decoration: const InputDecoration(labelText: 'المدينة'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _districtController,
-          decoration: const InputDecoration(labelText: 'الحي / المنطقة (مثال: شبرا)'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _neighbourhoodController,
-          decoration: const InputDecoration(labelText: 'المجاورة / الشياخة (neighbourhood)'),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _streetController,
-          decoration: const InputDecoration(labelText: 'الشارع ورقم البناية (كامل)'),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _roadController,
-                decoration: const InputDecoration(labelText: 'اسم الشارع / الطريق'),
+
+        const SizedBox(height: 24),
+
+        Text('طريقة الدفع والتسوية', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        const SizedBox(height: 10),
+
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: c.primaryLight,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: c.primary.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.payments_outlined, color: c.primary, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('الدفع نقداً كاش عند وصول الفني', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: c.primary, fontFamily: 'Cairo')),
+                    Text('الدفع نقداً كاش هو الوسيلة الحالية. سنضيف خيارات فودافون كاش وبطاقات الدفع قريباً.', style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _houseNumberController,
-                decoration: const InputDecoration(labelText: 'رقم المبنى / البناية'),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _buildingController,
-          decoration: const InputDecoration(labelText: 'رقم الطابق أو الشقة بالتفصيل'),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _postcodeController,
-                decoration: const InputDecoration(labelText: 'الرمز البريدي'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _countryController,
-                decoration: const InputDecoration(labelText: 'البلد'),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildStep6TimingSlot() {
-    return Column(
+  Widget _buildSummaryRow(IconData icon, String title, String value, {String? sub}) {
+    final c = context.colors;
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('الخطوة 6: جدول توقيت الزيارة المنزلية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        const Text('موعد الزيارة:'),
-        Row(
-          children: [
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text('اليوم'),
-                value: 'today',
-                groupValue: _scheduleDate,
-                onChanged: (val) => setState(() => _scheduleDate = val!),
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<String>(
-                title: const Text('غداً'),
-                value: 'tomorrow',
-                groupValue: _scheduleDate,
-                onChanged: (val) => setState(() => _scheduleDate = val!),
-              ),
-            ),
-          ],
+        Icon(icon, color: c.primary, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(fontSize: 11, color: c.textMuted, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              const SizedBox(height: 2),
+              Text(value, style: TextStyle(fontSize: 13, color: c.textPrimary, fontWeight: FontWeight.bold, fontFamily: 'Cairo')),
+              if (sub != null) ...[
+                const SizedBox(height: 2),
+                Text(sub, style: TextStyle(fontSize: 11, color: c.accent, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+              ],
+            ],
+          ),
         ),
-        const SizedBox(height: 16),
-        const Text('فترة الزيارة المفضلة:'),
-        DropdownButtonFormField<String>(
-          value: _timeSlot,
-          onChanged: (val) => setState(() => _timeSlot = val!),
-          items: const [
-            DropdownMenuItem(value: 'morning_9_12', child: Text('صباحاً (9:00 - 12:00)')),
-            DropdownMenuItem(value: 'afternoon_12_3', child: Text('ظهراً (12:00 - 3:00)')),
-            DropdownMenuItem(value: 'evening_3_6', child: Text('مساءً (3:00 - 6:00)')),
-          ],
-        ),
-        const SizedBox(height: 24),
-        SwitchListTile(
-          title: const Text('حالة طوارئ فحص فوري عاجل'),
-          subtitle: const Text('يتم احتساب رسوم إضافية لضمان تحرك فني طوارئ خلال ساعة'),
-          value: _isEmergency,
-          onChanged: (val) {
-            setState(() => _isEmergency = val);
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep7PricingSummary() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('الخطوة 7: تفاصيل تسعير الفاتورة للفحص', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
-        _buildPricingRow('إجمالي رسوم الفحوصات:', '$_servicesTotal ج.م'),
-        const SizedBox(height: 12),
-        _buildPricingRow('رسوم انتقال الفني للمنزل:', '$_transferFee ج.م'),
-        const SizedBox(height: 12),
-        _buildPricingRow('رسوم الطوارئ الإضافية:', '$_emergencyFee ج.م'),
-        const Divider(height: 32, thickness: 1),
-        _buildPricingRow('إجمالي المبلغ المستحق:', '$_grandTotal ج.م', isTotal: true),
       ],
     );
   }
@@ -867,79 +1354,20 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         Text(
           title,
           style: TextStyle(
-            fontSize: isTotal ? 16 : 14,
+            fontSize: isTotal ? 14 : 12,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
             color: isTotal ? c.textPrimary : c.textSecondary,
+            fontFamily: 'Cairo',
           ),
         ),
         Text(
           value,
           style: TextStyle(
-            fontSize: isTotal ? 18 : 14,
+            fontSize: isTotal ? 16 : 12,
             fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
             color: isTotal ? c.success : c.textPrimary,
+            fontFamily: 'Inter',
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep8PaymentChoice() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('الخطوة 8: طريقة الدفع والتسوية', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 16),
-        ListTile(
-          leading: Icon(Icons.money, color: Colors.green),
-          title: Text('الدفع نقداً للفني الطبي بعد الزيارة (Cash)'),
-          subtitle: Text('الدفع كاش هو الخيار المتاح حالياً في المرحلة الأولى للمشروع. وسائل الدفع الإلكتروني تضاف قريباً.'),
-          selected: true,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStep9VerificationConfirm() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text('الخطوة 9: مراجعة نهائية للطلب قبل التأكيد', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
-        ListTile(
-          leading: const Icon(Icons.healing_outlined),
-          title: const Text('الخدمات المحددة:'),
-          subtitle: Text(
-            _servicesCatalog
-                .where((s) => _selectedServiceIds.contains(s.id))
-                .map((s) => s.nameAr)
-                .join(', '),
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.person_pin),
-          title: const Text('اسم المريض للتواصل:'),
-          subtitle: Text(_patientNameController.text),
-        ),
-        ListTile(
-          leading: const Icon(Icons.location_on_outlined),
-          title: const Text('عنوان الزيارة:'),
-          subtitle: Text(
-            '${_streetController.text}، ${_districtController.text}، ${_governorateController.text}',
-          ),
-        ),
-        ListTile(
-          leading: const Icon(Icons.alarm),
-          title: const Text('الموعد:'),
-          subtitle: Text(
-            '${_scheduleDate == 'today' ? 'اليوم' : 'غداً'} فترة ${_timeSlot == 'morning_9_12' ? 'صباحاً' : 'ظهراً'}',
-          ),
-        ),
-        const Divider(height: 32),
-        Text(
-          'قيمة الفاتورة النهائية: $_grandTotal ج.م',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: context.colors.success),
-          textAlign: TextAlign.center,
         ),
       ],
     );
@@ -947,23 +1375,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
 
   @override
   void dispose() {
-    _patientNameController.dispose();
-    _patientPhoneController.dispose();
-    _patientAgeController.dispose();
     _weightController.dispose();
     _floorController.dispose();
     _notesController.dispose();
-    _governorateController.dispose();
-    _districtController.dispose();
-    _streetController.dispose();
-    _buildingController.dispose();
-    _houseNumberController.dispose();
-    _roadController.dispose();
-    _neighbourhoodController.dispose();
-    _suburbController.dispose();
-    _cityController.dispose();
-    _postcodeController.dispose();
-    _countryController.dispose();
     super.dispose();
   }
 }

@@ -6,6 +6,8 @@ import '../features/home/home_screen.dart';
 import '../features/order_create/order_wizard_screen.dart';
 import '../features/order_detail/order_detail_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/profile/saved_patients_screen.dart';
+import '../features/profile/saved_addresses_screen.dart';
 import 'package:patient_app/core/services/storage_service.dart';
 import 'package:patient_app/core/services/notification_service.dart';
 
@@ -57,6 +59,14 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/profile',
       builder: (BuildContext context, GoRouterState state) => const ProfileScreen(),
+    ),
+    GoRoute(
+      path: '/profile/patients',
+      builder: (BuildContext context, GoRouterState state) => const SavedPatientsScreen(),
+    ),
+    GoRoute(
+      path: '/profile/addresses',
+      builder: (BuildContext context, GoRouterState state) => const SavedAddressesScreen(),
     ),
   ],
 );
