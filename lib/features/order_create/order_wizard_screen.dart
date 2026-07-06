@@ -4,6 +4,7 @@ import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/service.dart';
 import 'package:patient_app/core/models/saved_patient.dart';
 import 'package:patient_app/core/models/saved_address.dart';
+import 'package:patient_app/core/models/category.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -24,6 +25,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   int _currentStep = 1;
   bool _isLoading = false;
   String? _errorMessage;
+  ServiceCategory? _categoryMeta;
 
   // Services catalog
   List<MedicalService> _servicesCatalog = [];
@@ -72,7 +74,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     setState(() => _isLoading = true);
     try {
       // 1. Fetch services catalog
-      final catalogEndpoint = widget.category == 'xray' ? '/services/xray' : '/services/lab';
+      final catalogEndpoint = '/services/${widget.category}';
       final catalogRes = await _api.dio.get(catalogEndpoint);
       
       // 2. Fetch saved patients
@@ -81,12 +83,37 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       // 3. Fetch saved addresses
       final addressesRes = await _api.dio.get(Constants.savedAddresses);
 
+      // 4. Fetch categories list dynamically to extract meta
+      ServiceCategory? matchedCategory;
+      try {
+        final categoriesRes = await _api.dio.get(Constants.categories);
+        final List catList = categoriesRes.data['data'] ?? [];
+        final parsedCats = catList.map((item) => ServiceCategory.fromJson(item)).toList();
+        matchedCategory = parsedCats.firstWhere(
+          (c) => c.key == widget.category,
+          orElse: () => ServiceCategory(
+            id: '',
+            nameAr: widget.category == 'xray' ? 'أشعة سينية' : (widget.category == 'lab' ? 'تحاليل طبية' : widget.category),
+            nameEn: widget.category,
+            key: widget.category,
+            icon: 'category',
+            iconBg: '#E6F0FA',
+            iconColor: '#2B7EC2',
+            sortOrder: 0,
+            isActive: true,
+          ),
+        );
+      } catch (catErr) {
+        debugPrint('Error getting category metadata dynamically: $catErr');
+      }
+
       if (mounted) {
         final List serviceList = catalogRes.data['data'] ?? [];
         final List patientList = patientsRes.data['data'] ?? [];
         final List addressList = addressesRes.data['data'] ?? [];
 
         setState(() {
+          _categoryMeta = matchedCategory;
           _servicesCatalog = serviceList.map((item) => MedicalService.fromJson(item)).toList();
           _savedPatientsList = patientList.map((item) => SavedPatient.fromJson(item)).toList();
           _savedAddressesList = addressList.map((item) => SavedAddress.fromJson(item)).toList();
@@ -703,7 +730,34 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   }
 
   String _getCategoryName() {
-    return widget.category == 'xray' ? 'أشعة منزلية' : 'تحاليل طبية';
+    if (_categoryMeta != null) return _categoryMeta!.nameAr;
+    switch (widget.category) {
+      case 'xray': return 'أشعة سينية';
+      case 'echo': return 'إيكو قلب';
+      case 'ecg': return 'رسم قلب';
+      case 'lab': return 'تحاليل طبية';
+      default: return 'فحوصات طبية';
+    }
+  }
+
+  String _getNotesTitle() {
+    if (_categoryMeta != null) return 'ملاحظات خاصة (${_categoryMeta!.nameAr})';
+    switch (widget.category) {
+      case 'lab': return 'ملاحظات خاصة (تحاليل)';
+      case 'echo': return 'ملاحظات خاصة (إيكو)';
+      case 'ecg': return 'ملاحظات خاصة (رسم قلب)';
+      default: return 'ملاحظات خاصة بالخدمة';
+    }
+  }
+
+  String _getNotesPlaceholder() {
+    if (_categoryMeta != null) return 'أي ملاحظات خاصة بفحص ${_categoryMeta!.nameAr}...';
+    switch (widget.category) {
+      case 'lab': return 'هل المريض صائم؟ أو أي ملاحظات للتحاليل...';
+      case 'echo': return 'أي ملاحظات خاصة بفحص الإيكو أو حالة المريض...';
+      case 'ecg': return 'أي ملاحظات خاصة برسم القلب أو النبض...';
+      default: return 'أي تفاصيل أو ملاحظات إضافية للفني الطبي...';
+    }
   }
 
   Widget _buildStepView() {
@@ -955,13 +1009,13 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             decoration: const InputDecoration(labelText: 'ملاحظات طبية وتوجيهات خاصة للفني'),
           ),
         ] else ...[
-          // For Lab Category, only show general notes (no need for elevator/weight/floor details)
-          Text('ملاحظات خاصة (تحاليل)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+          // For other categories, show dynamic notes
+          Text(_getNotesTitle(), style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
           const SizedBox(height: 10),
           TextField(
             controller: _notesController,
             maxLines: 2,
-            decoration: const InputDecoration(labelText: 'هل المريض صائم؟ أو أي ملاحظات للتحاليل...'),
+            decoration: InputDecoration(labelText: _getNotesPlaceholder()),
           ),
         ]
       ],

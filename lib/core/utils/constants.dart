@@ -31,6 +31,7 @@ class Constants {
 
   // ─── Patient App Endpoints ──────────────────────────────────────────────────
   static const String services = '/services';
+  static const String categories = '/categories';
   static const String orders = '/orders';
   static const String ordersHistory = '/orders/history';
   static const String savedPatients = '/patients/saved';

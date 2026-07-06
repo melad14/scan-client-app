@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/order.dart';
+import 'package:patient_app/core/models/category.dart';
 import 'package:patient_app/core/services/storage_service.dart';
 import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/utils/constants.dart';
@@ -30,6 +31,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   String _statusFilter = 'all';
   final TextEditingController _searchController = TextEditingController();
 
+  // Categories state
+  List<ServiceCategory> _categories = [];
+  bool _isLoadingCategories = false;
+  String? _categoriesError;
+
   final _api = ApiClient();
   late AnimationController _tabAnimController;
   late Animation<double> _tabFade;
@@ -41,10 +47,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     _tabFade = CurvedAnimation(parent: _tabAnimController, curve: Curves.easeOut);
     _tabAnimController.forward();
     _loadUserInfo();
+    _fetchCategories();
     _fetchOrders();
     
     // Register FCM Device Token for notifications
     NotificationService.registerDeviceToken();
+  }
+
+  Future<void> _fetchCategories() async {
+    if (!mounted) return;
+    setState(() { _isLoadingCategories = true; _categoriesError = null; });
+    try {
+      final res = await _api.dio.get(Constants.categories);
+      if (res.statusCode == 200) {
+        final List list = res.data['data'] ?? [];
+        if (mounted) {
+          setState(() {
+            _categories = list.map((item) => ServiceCategory.fromJson(item)).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load categories: $e');
+      if (mounted) setState(() => _categoriesError = 'تعذر تحميل التصنيفات');
+    } finally {
+      if (mounted) setState(() => _isLoadingCategories = false);
+    }
   }
 
   @override
@@ -198,7 +226,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     return RefreshIndicator(
       color: c.primary,
       backgroundColor: c.surface,
-      onRefresh: _loadUserInfo,
+      onRefresh: () async {
+        await _loadUserInfo();
+        await _fetchCategories();
+      },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
@@ -223,52 +254,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
             ),
           ),
 
-          // ── Service Cards Grid (2×2) ────────────────────
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverGrid(
-              delegate: SliverChildListDelegate([
-                _ServiceCard(
-                  title: 'أشعة سينية',
-                  subtitle: 'X-Ray',
-                  icon: Icons.monitor_heart_rounded,
-                  iconBg: c.primaryLight,
-                  iconColor: c.primary,
-                  onTap: () => context.push('/orders/create?category=xray'),
+          // ── Service Cards Grid (Dynamic) ────────────────────
+          if (_isLoadingCategories)
+            const SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: CircularProgressIndicator(),
                 ),
-                _ServiceCard(
-                  title: 'إيكو قلب',
-                  subtitle: 'Echo',
-                  icon: Icons.favorite_rounded,
-                  iconBg: const Color(0xFFE6F0FA),
-                  iconColor: const Color(0xFF2B7EC2),
-                  onTap: () => context.push('/orders/create?category=xray'),
+              ),
+            )
+          else if (_categoriesError != null)
+            SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      Text(_categoriesError!, style: TextStyle(color: c.textSecondary, fontFamily: 'Cairo', fontSize: 14)),
+                      const SizedBox(height: 8),
+                      TextButton(
+                        onPressed: _fetchCategories,
+                        child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
+                      ),
+                    ],
+                  ),
                 ),
-                _ServiceCard(
-                  title: 'رسم قلب',
-                  subtitle: 'ECG',
-                  icon: Icons.show_chart_rounded,
-                  iconBg: const Color(0xFFFEF3E2),
-                  iconColor: const Color(0xFFD97B0A),
-                  onTap: () => context.push('/orders/create?category=xray'),
+              ),
+            )
+          else if (_categories.isEmpty)
+            const SliverToBoxAdapter(
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Text('لا توجد أقسام متاحة حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
                 ),
-                _ServiceCard(
-                  title: 'تحاليل طبية',
-                  subtitle: 'Lab Tests',
-                  icon: Icons.science_rounded,
-                  iconBg: const Color(0xFFEFF6E8),
-                  iconColor: const Color(0xFF4D8C2C),
-                  onTap: () => context.push('/orders/create?category=lab'),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverGrid(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final cat = _categories[index];
+                    return _ServiceCard(
+                      title: cat.nameAr,
+                      subtitle: cat.nameEn,
+                      icon: cat.getIconData(),
+                      iconBg: cat.parseBgColor(),
+                      iconColor: cat.parseColor(),
+                      onTap: () => context.push('/orders/create?category=${cat.key}'),
+                    );
+                  },
+                  childCount: _categories.length,
                 ),
-              ]),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 1.05,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: 1.05,
+                ),
               ),
             ),
-          ),
 
           // ── Info Banner ──────────────────────────────────
           SliverToBoxAdapter(
