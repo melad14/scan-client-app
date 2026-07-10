@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/order.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:dio/dio.dart';
+import 'dart:async';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
-  const OrderDetailScreen({super.key, required this.orderId});
+  final bool fromWizard;
+  const OrderDetailScreen({super.key, required this.orderId, this.fromWizard = false});
 
   @override
   State<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -21,17 +24,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   final TextEditingController _reviewController = TextEditingController();
   bool _isSubmittingRating = false;
   bool _isCancelling = false;
+  Timer? _pollingTimer;
 
   final _api = ApiClient();
 
   @override
   void initState() {
     super.initState();
-    _fetchDetails();
+    _fetchDetails().then((_) {
+      _startPolling();
+    });
   }
 
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _reviewController.dispose();
     super.dispose();
   }
@@ -62,6 +69,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
 
   Future<void> _cancelOrder() async {
     final c = context.colors;
+    final isOnWay = _order?.status == 'on_way';
+    final double transferFee = (_order?.pricing?['transferFee'] ?? 150.0).toDouble();
+
     final confirmed = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: c.surface,
@@ -76,10 +86,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             const SizedBox(height: 20),
             Icon(Icons.cancel_outlined, color: c.error, size: 48),
             const SizedBox(height: 12),
-            Text('إلغاء الطلب',
+            Text(isOnWay ? 'إلغاء مع فرض رسوم!' : 'إلغاء الطلب',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.textPrimary)),
             const SizedBox(height: 8),
-            Text('هل أنت متأكد من إلغاء هذا الطلب؟ لا يمكن التراجع عن هذه الخطوة.',
+            Text(
+                isOnWay
+                    ? 'لقد تحرك فريق المركز بالفعل نحو موقعك. عند الإلغاء الآن سيتم فرض رسوم الانتقال وقدرها ($transferFee جنيه).'
+                    : 'هل أنت متأكد من إلغاء هذا الطلب؟ لا يمكن التراجع عن هذه الخطوة.',
                 style: TextStyle(fontSize: 13, color: c.textSecondary), textAlign: TextAlign.center),
             const SizedBox(height: 24),
             Row(children: [
@@ -120,6 +133,161 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     }
   }
 
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (_order == null) return;
+      if (_order!.status == 'completed' || _order!.status == 'report_ready' || _order!.status == 'cancelled') {
+        timer.cancel();
+        return;
+      }
+      try {
+        final res = await _api.dio.get('${Constants.orders}/${widget.orderId}');
+        if (res.statusCode == 200 && mounted) {
+          final newOrder = MedicalOrder.fromJson(res.data['data']);
+          if (newOrder.status == 'completed' || newOrder.status == 'report_ready') {
+            timer.cancel();
+            setState(() => _order = newOrder);
+            if (mounted) {
+              _showCompletionDialog();
+            }
+          } else {
+            setState(() => _order = newOrder);
+          }
+        }
+      } catch (_) {}
+    });
+  }
+
+  void _showCompletionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'تم اكتمال الفحص 🎉',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        content: const Text(
+          'تم الانتهاء من الفحص الطبي بنجاح! يمكنك الآن العودة للرئيسية ومتابعة تقاريرك الطبية.',
+          style: TextStyle(fontFamily: 'Cairo', height: 1.5),
+          textAlign: TextAlign.center,
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: context.colors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              context.go('/');
+            },
+            child: const Text('العودة للرئيسية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+          )
+        ],
+      ),
+    );
+  }
+
+  bool _isSubmittingComplaint = false;
+
+  Future<void> _showComplaintSheet() async {
+    final c = context.colors;
+    final textCtrl = TextEditingController();
+    String? localError;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: c.surface,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+                left: 24,
+                right: 24,
+                top: 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text('تقديم شكوى بشأن هذه الزيارة ⚠️',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+                    const SizedBox(height: 12),
+                    Text('يرجى كتابة تفاصيل الشكوى بوضوح وسيقوم الدعم الفني بمراجعتها والتواصل معك لحل المشكلة فوراً.',
+                        style: TextStyle(fontSize: 12, color: c.textSecondary, fontFamily: 'Cairo', height: 1.5)),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: textCtrl,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        hintText: 'اكتب تفاصيل الشكوى أو الملاحظات هنا...',
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    if (localError != null) ...[
+                      const SizedBox(height: 12),
+                      Text(localError!, style: TextStyle(color: c.error, fontSize: 12, fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+                    ],
+                    const SizedBox(height: 20),
+                    ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white),
+                      onPressed: _isSubmittingComplaint
+                          ? null
+                          : () async {
+                              final text = textCtrl.text.trim();
+                              if (text.isEmpty) {
+                                setModalState(() => localError = 'يرجى كتابة نص الشكوى');
+                                return;
+                              }
+                              setModalState(() => _isSubmittingComplaint = true);
+                              try {
+                                final payload = {
+                                  'orderId': widget.orderId,
+                                  'text': text,
+                                };
+                                final res = await _api.dio.post('/complaints', data: payload);
+                                if (res.statusCode == 201) {
+                                  Navigator.pop(context);
+                                  _showSnack('✅ تم إرسال شكواك وجاري مراجعتها من قبل الإدارة', success: true);
+                                }
+                              } on DioException catch (e) {
+                                setModalState(() {
+                                  localError = e.response?.data?['message'] ?? 'فشل تسجيل الشكوى';
+                                  _isSubmittingComplaint = false;
+                                });
+                              } catch (_) {
+                                setModalState(() {
+                                  localError = 'حدث خطأ غير متوقع';
+                                  _isSubmittingComplaint = false;
+                                });
+                              }
+                            },
+                      child: _isSubmittingComplaint
+                          ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('إرسال الشكوى للأدمن'),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _submitRating() async {
     setState(() => _isSubmittingRating = true);
     try {
@@ -154,32 +322,49 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    return Scaffold(
-      backgroundColor: c.background,
-      appBar: AppBar(
-        title: Text(_order?.orderNumber ?? 'تفاصيل الطلب',
-            style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh_rounded),
-            onPressed: _fetchDetails,
-            tooltip: 'تحديث',
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          context.go('/');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: c.background,
+        appBar: AppBar(
+          title: Text(_order?.orderNumber ?? 'تفاصيل الطلب',
+              style: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700)),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go('/');
+              }
+            },
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        color: c.primary,
-        backgroundColor: c.surface,
-        onRefresh: _fetchDetails,
-        child: _isLoading
-            ? _buildSkeleton()
-            : _errorMessage != null
-                ? _buildErrorState()
-                : _buildContent(),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: _fetchDetails,
+              tooltip: 'تحديث',
+            ),
+          ],
+        ),
+        body: RefreshIndicator(
+          color: c.primary,
+          backgroundColor: c.surface,
+          onRefresh: _fetchDetails,
+          child: _isLoading
+              ? _buildSkeleton()
+              : _errorMessage != null
+                  ? _buildErrorState()
+                  : _buildContent(),
+        ),
       ),
     );
   }
@@ -334,7 +519,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SectionTitle(icon: Icons.engineering_rounded, title: 'الفني الطبي'),
+                _SectionTitle(icon: Icons.engineering_rounded, title: 'فريق زيارة المركز'),
                 const SizedBox(height: 12),
                 Row(
                   children: [
@@ -368,8 +553,42 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           const SizedBox(height: 12),
         ],
 
-        // ─── Report ───────────────────────────────────────
-        if (order.status == 'report_ready' && order.report != null) ...[
+        // ─── Report (Pending Approval) ──────────────────────
+        if ((order.status == 'completed' || order.status == 'report_ready') && !order.isResultsApproved) ...[
+          _Card(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(icon: Icons.hourglass_empty_rounded, title: 'التقرير الطبي والنتائج'),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: c.warningBg.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.warning.withOpacity(0.2)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline_rounded, color: c.warning, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'جاري مراجعة وكتابة التقرير النهائي من قبل الإدارة وسوف يظهر هنا فور اعتماده ونشره.',
+                          style: TextStyle(fontFamily: 'Cairo', fontSize: 12, color: c.warning, height: 1.5, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+
+        // ─── Report (Approved & Ready) ─────────────────────
+        if ((order.status == 'completed' || order.status == 'report_ready') && order.isResultsApproved && order.report != null) ...[
           _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,9 +648,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _SectionTitle(icon: Icons.star_rounded, title: 'تقييم الفني'),
+                _SectionTitle(icon: Icons.star_rounded, title: 'تقييم زيارة المركز'),
                 const SizedBox(height: 12),
-                Text('كيف كانت تجربتك مع الفني الطبي؟',
+                Text('كيف كانت تجربتك مع فريق زيارة المركز؟',
                     style: TextStyle(fontSize: 13, color: c.textSecondary)),
                 const SizedBox(height: 12),
                 Row(
@@ -525,7 +744,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         const SizedBox(height: 12),
 
         // ─── Cancel Button ────────────────────────────────
-        if (order.status == 'pending' || order.status == 'assigned') ...[
+        if (order.status == 'pending' || order.status == 'accepted' || order.status == 'assigned' || order.status == 'on_way') ...[
           GestureDetector(
             onTap: _isCancelling ? null : _cancelOrder,
             child: Container(
@@ -545,8 +764,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
         ],
+
+        // ─── Complaints Button ────────────────────────────
+        OutlinedButton.icon(
+          onPressed: _showComplaintSheet,
+          icon: Icon(Icons.warning_amber_rounded, color: c.error, size: 18),
+          label: const Text('تقديم شكوى أو اعتراض', style: TextStyle(fontFamily: 'Cairo', color: Colors.red, fontWeight: FontWeight.bold, fontSize: 13)),
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(double.infinity, 48),
+            side: BorderSide(color: c.error.withOpacity(0.3)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        const SizedBox(height: 24),
       ],
     );
   }

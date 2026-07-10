@@ -8,6 +8,7 @@ import '../features/order_detail/order_detail_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/saved_patients_screen.dart';
 import '../features/profile/saved_addresses_screen.dart';
+import '../features/profile/complaints_list_screen.dart';
 import 'package:patient_app/core/services/storage_service.dart';
 import 'package:patient_app/core/services/notification_service.dart';
 
@@ -53,7 +54,8 @@ final GoRouter appRouter = GoRouter(
       path: '/orders/:orderId', // Deep linking configuration for notification redirection
       builder: (BuildContext context, GoRouterState state) {
         final orderId = state.pathParameters['orderId']!;
-        return OrderDetailScreen(orderId: orderId);
+        final fromWizard = state.uri.queryParameters['fromWizard'] == 'true';
+        return OrderDetailScreen(orderId: orderId, fromWizard: fromWizard);
       },
     ),
     GoRoute(
@@ -67,6 +69,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/profile/addresses',
       builder: (BuildContext context, GoRouterState state) => const SavedAddressesScreen(),
+    ),
+    GoRoute(
+      path: '/profile/complaints',
+      builder: (BuildContext context, GoRouterState state) => const ComplaintsListScreen(),
     ),
   ],
 );

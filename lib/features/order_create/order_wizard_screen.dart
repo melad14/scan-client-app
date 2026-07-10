@@ -74,7 +74,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     setState(() => _isLoading = true);
     try {
       // 1. Fetch services catalog
-      final catalogEndpoint = '/services/${widget.category}';
+      final catalogEndpoint = '/services/category/${widget.category}';
       final catalogRes = await _api.dio.get(catalogEndpoint);
       
       // 2. Fetch saved patients
@@ -138,11 +138,19 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         });
       }
     } catch (e) {
+      if (e is DioException) {
+        debugPrint('DioException details: path=${e.requestOptions.path}, status=${e.response?.statusCode}, data=${e.response?.data}');
+      } else {
+        debugPrint('Error fetching initial booking data: $e');
+      }
       setState(() => _errorMessage = 'فشل تحميل بيانات الحجز الأساسية');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
+  // Timing state variables
+  DateTime _customScheduleDate = DateTime.now();
 
   void _applyPatientDefaults(SavedPatient p) {
     setState(() {
@@ -170,13 +178,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
 
   void _calculatePriceDetails() {
     double servicesSum = 0.0;
-    for (var id in _selectedServiceIds) {
-      final s = _servicesCatalog.firstWhere((element) => element.id == id);
-      servicesSum += s.price;
+    if (widget.category != 'prescription_only') {
+      for (var id in _selectedServiceIds) {
+        final s = _servicesCatalog.firstWhere((element) => element.id == id);
+        servicesSum += s.price;
+      }
     }
     
     // Simulate pricing parameters
-    double transfer = 100.0;
+    double transfer = 150.0;
     double emergency = _isEmergency ? 150.0 : 0.0;
 
     setState(() {
@@ -195,13 +205,22 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
 
     setState(() => _isLoading = true);
     try {
-      final date = _scheduleDate == 'today'
-          ? DateTime.now()
-          : DateTime.now().add(const Duration(days: 1));
+      final DateTime date;
+      if (_scheduleDate == 'today') {
+        date = DateTime.now();
+      } else if (_scheduleDate == 'tomorrow') {
+        date = DateTime.now().add(const Duration(days: 1));
+      } else {
+        date = _customScheduleDate;
+      }
 
       final payload = {
         'serviceCategory': widget.category,
         'serviceIds': _selectedServiceIds,
+        'prescription': {
+          'images': _hasPrescription && _prescriptionFilename != null ? [_prescriptionFilename!] : [],
+          'pdf': null
+        },
         'patientName': _selectedPatient!.name,
         'patientPhone': _selectedPatient!.phone,
         'patientAge': _selectedPatient!.age,
@@ -244,10 +263,18 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('تم تسجيل الطلب وإرساله للإدارة بنجاح!')),
         );
-        context.go('/orders/$orderId');
+        context.go('/orders/$orderId?fromWizard=true');
       }
     } catch (e) {
-      setState(() => _errorMessage = 'فشل تسجيل الطلب. يرجى مراجعة البيانات المدخلة.');
+      String msg = 'فشل تسجيل الطلب. يرجى المحاولة مرة أخرى.';
+      if (e is DioException) {
+        final serverMsg = e.response?.data?['message'];
+        if (serverMsg != null && serverMsg.toString().isNotEmpty) {
+          msg = serverMsg.toString();
+        }
+        debugPrint('Order submit error: path=${e.requestOptions.path}, status=${e.response?.statusCode}, data=${e.response?.data}');
+      }
+      setState(() => _errorMessage = msg);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -272,9 +299,17 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     }
     
     if (_currentStep == 2) {
-      if (_selectedServiceIds.isEmpty) {
-        setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل');
-        return;
+      if (widget.category == 'prescription_only') {
+        if (!_hasPrescription) {
+          setState(() => _errorMessage = 'يرجى إرفاق صورة الروشتة للمتابعة');
+          return;
+        }
+      } else {
+        // If catalog has services, require at least one. If empty, allow continuing with prescription.
+        if (_servicesCatalog.isNotEmpty && _selectedServiceIds.isEmpty && !_hasPrescription) {
+          setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل أو إرفاق الروشتة');
+          return;
+        }
       }
     }
     
@@ -448,6 +483,22 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             
             Future<void> detectLocation() async {
               try {
+                bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+                if (!serviceEnabled) {
+                  await Geolocator.openLocationSettings();
+                  return;
+                }
+
+                LocationPermission permission = await Geolocator.checkPermission();
+                if (permission == LocationPermission.denied) {
+                  permission = await Geolocator.requestPermission();
+                  if (permission == LocationPermission.denied) return;
+                }
+
+                if (permission == LocationPermission.deniedForever) {
+                  return;
+                }
+
                 final position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
                 setModalState(() {
                   mapLatLng = LatLng(position.latitude, position.longitude);
@@ -509,7 +560,10 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                                 },
                               ),
                               children: [
-                                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+                                TileLayer(
+                                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                                  userAgentPackageName: 'com.example.patient_app',
+                                ),
                                 MarkerLayer(
                                   markers: [
                                     Marker(point: mapLatLng, child: const Icon(Icons.location_on_rounded, color: Colors.red, size: 36)),
@@ -626,19 +680,43 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
 
-    return Scaffold(
-      backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.surface,
-        title: Text(
-          'خطوة $_currentStep من 4: حجز ${_getCategoryName()}',
-          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: c.textPrimary),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentStep > 1) {
+          _prevStep();
+        } else {
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pop();
+          } else {
+            context.go('/');
+          }
+        }
+      },
+      child: Scaffold(
+        backgroundColor: c.background,
+        appBar: AppBar(
+          backgroundColor: c.surface,
+          title: Text(
+            'خطوة $_currentStep من 4: حجز ${_getCategoryName()}',
+            style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 16, color: c.textPrimary),
+          ),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
+            onPressed: () {
+              if (_currentStep > 1) {
+                _prevStep();
+              } else {
+                if (Navigator.of(context).canPop()) {
+                  Navigator.of(context).pop();
+                } else {
+                  context.go('/');
+                }
+              }
+            },
+          ),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -726,6 +804,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 ],
               ),
             ),
+      ),
     );
   }
 
@@ -1027,47 +1106,77 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   // ────────────────────────────────────────────────────────────────────────────
   Widget _buildStep2WhatServices() {
     final c = context.colors;
+    final isPrescriptionOnly = widget.category == 'prescription_only';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('اختر الفحوصات الطبية المطلوبة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
-        const SizedBox(height: 12),
-        
-        ..._servicesCatalog.map((service) {
-          final isChecked = _selectedServiceIds.contains(service.id);
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            decoration: BoxDecoration(
-              color: c.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: isChecked ? c.primary : c.borderLight),
-            ),
-            child: CheckboxListTile(
-              title: Text(service.nameAr, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-              subtitle: Text('${service.price} ج.م · ${service.description ?? ""}', style: TextStyle(fontFamily: 'Cairo', color: c.textSecondary, fontSize: 12)),
-              value: isChecked,
-              activeColor: c.primary,
-              onChanged: (val) {
-                setState(() {
-                  if (val == true) {
-                    _selectedServiceIds.add(service.id);
-                  } else {
-                    _selectedServiceIds.remove(service.id);
-                  }
-                });
-              },
-            ),
-          );
-        }),
+        if (!isPrescriptionOnly) ...[
+          Text('اختر الفحوصات الطبية المطلوبة', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+          const SizedBox(height: 12),
 
-        const Divider(height: 36),
+          if (_servicesCatalog.isEmpty)
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: c.warningBg,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: c.warning.withOpacity(0.4)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: c.warning),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'لا توجد فحوصات مضافة لهذه الفئة حتى الآن.\nيمكنك الاستمرار وإرفاق الروشتة ليحدد لك المركز الفحوصات المناسبة.',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: c.textPrimary, height: 1.6),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ..._servicesCatalog.map((service) {
+              final isChecked = _selectedServiceIds.contains(service.id);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: BoxDecoration(
+                  color: c.surface,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isChecked ? c.primary : c.borderLight),
+                ),
+                child: CheckboxListTile(
+                  title: Text(service.nameAr, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
+                  subtitle: Text('${service.price} ج.م · ${service.description ?? ""}', style: TextStyle(fontFamily: 'Cairo', color: c.textSecondary, fontSize: 12)),
+                  value: isChecked,
+                  activeColor: c.primary,
+                  onChanged: (val) {
+                    setState(() {
+                      if (val == true) {
+                        _selectedServiceIds.add(service.id);
+                      } else {
+                        _selectedServiceIds.remove(service.id);
+                      }
+                    });
+                  },
+                ),
+              );
+            }),
+          const Divider(height: 36),
+        ],
 
-        Text('إرفاق صورة الروشتة (اختياري)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+
+        Text(
+          isPrescriptionOnly ? 'إرفاق صورة الروشتة الطبية (إلزامي) ⚠️' : 'إرفاق صورة الروشتة (اختياري)',
+          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo'),
+        ),
         const SizedBox(height: 8),
         Text(
-          'تساعد صورة الروشتة الطبية الفني على جلب المستلزمات الطبية الصحيحة والتجهيز الطبي المسبق للحالة.',
-          style: TextStyle(color: c.textSecondary, fontSize: 12, fontFamily: 'Cairo'),
+          isPrescriptionOnly
+              ? 'يرجى تصوير الروشتة بشكل واضح ليتمكن فريق المركز من تحديد الفحوصات اللازمة والتكلفة وتأكيد حجزك.'
+              : 'تساعد صورة الروشتة الطبية فريق المركز على جلب المستلزمات الطبية الصحيحة والتجهيز الطبي المسبق للحالة.',
+          style: TextStyle(color: c.textSecondary, fontSize: 12, fontFamily: 'Cairo', height: 1.5),
         ),
         const SizedBox(height: 16),
         
@@ -1134,7 +1243,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('متى ترغب في زيارة الفني الطبي؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+        Text('متى ترغب في زيارة فريق المركز؟', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
         const SizedBox(height: 16),
         
         Row(
@@ -1153,13 +1262,13 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     children: [
                       Icon(Icons.calendar_today_rounded, color: _scheduleDate == 'today' ? c.primary : c.textSecondary),
                       const SizedBox(height: 8),
-                      Text('زيارة اليوم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _scheduleDate == 'today' ? c.primary : c.textPrimary)),
+                      Text('زيارة اليوم', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11, color: _scheduleDate == 'today' ? c.primary : c.textPrimary)),
                     ],
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 8),
             Expanded(
               child: GestureDetector(
                 onTap: () => setState(() => _scheduleDate = 'tomorrow'),
@@ -1174,7 +1283,46 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     children: [
                       Icon(Icons.event_repeat_rounded, color: _scheduleDate == 'tomorrow' ? c.primary : c.textSecondary),
                       const SizedBox(height: 8),
-                      Text('زيارة غداً', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, color: _scheduleDate == 'tomorrow' ? c.primary : c.textPrimary)),
+                      Text('زيارة غداً', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11, color: _scheduleDate == 'tomorrow' ? c.primary : c.textPrimary)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now(),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 14)),
+                  );
+                  if (picked != null) {
+                    setState(() {
+                      _customScheduleDate = picked;
+                      _scheduleDate = 'custom';
+                    });
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  decoration: BoxDecoration(
+                    color: _scheduleDate == 'custom' ? c.primaryLight : c.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _scheduleDate == 'custom' ? c.primary : c.borderLight, width: 1.5),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.calendar_month_rounded, color: _scheduleDate == 'custom' ? c.primary : c.textSecondary),
+                      const SizedBox(height: 8),
+                      Text(
+                        _scheduleDate == 'custom'
+                            ? '${_customScheduleDate.year}-${_customScheduleDate.month.toString().padLeft(2, '0')}-${_customScheduleDate.day.toString().padLeft(2, '0')}'
+                            : 'تاريخ مخصص',
+                        style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 11, color: _scheduleDate == 'custom' ? c.primary : c.textPrimary),
+                      ),
                     ],
                   ),
                 ),
@@ -1266,6 +1414,16 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   // ────────────────────────────────────────────────────────────────────────────
   Widget _buildStep4ConfirmAndPay() {
     final c = context.colors;
+    final isPrescriptionOnly = widget.category == 'prescription_only';
+
+    String dateText = '';
+    if (_scheduleDate == 'today') {
+      dateText = 'اليوم';
+    } else if (_scheduleDate == 'tomorrow') {
+      dateText = 'غداً';
+    } else {
+      dateText = '${_customScheduleDate.year}-${_customScheduleDate.month.toString().padLeft(2, '0')}-${_customScheduleDate.day.toString().padLeft(2, '0')}';
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1300,16 +1458,18 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               _buildSummaryRow(
                 Icons.healing_outlined,
                 'الفحوصات المطلوبة:',
-                _servicesCatalog
-                    .where((s) => _selectedServiceIds.contains(s.id))
-                    .map((s) => s.nameAr)
-                    .join(', '),
+                isPrescriptionOnly
+                    ? 'حجز بواسطة الروشتة المرفقة 📋'
+                    : _servicesCatalog
+                        .where((s) => _selectedServiceIds.contains(s.id))
+                        .map((s) => s.nameAr)
+                        .join(', '),
               ),
               const Divider(height: 20),
               _buildSummaryRow(
                 Icons.access_time_rounded,
                 'موعد الزيارة:',
-                '${_scheduleDate == 'today' ? 'اليوم' : 'غداً'} - ${_timeSlot == 'morning_9_12' ? 'الصباحية' : _timeSlot == 'afternoon_12_3' ? 'الظهر' : 'المسائية'}',
+                '$dateText - ${_timeSlot == 'morning_9_12' ? 'الصباحية' : _timeSlot == 'afternoon_12_3' ? 'الظهر' : 'المسائية'}',
                 sub: _isEmergency ? 'زيارة طوارئ عاجلة ⚡' : null,
               ),
             ],
@@ -1328,19 +1488,38 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: c.borderLight),
           ),
-          child: Column(
-            children: [
-              _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', '$_servicesTotal ج.م'),
-              const SizedBox(height: 8),
-              _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '$_transferFee ج.م'),
-              if (_isEmergency) ...[
-                const SizedBox(height: 8),
-                _buildPricingRow('رسوم خدمة طوارئ إضافية:', '$_emergencyFee ج.م'),
-              ],
-              const Divider(height: 24, thickness: 1),
-              _buildPricingRow('إجمالي رسوم الدفع المستحقة:', '$_grandTotal ج.م', isTotal: true),
-            ],
-          ),
+          child: isPrescriptionOnly
+              ? Column(
+                  children: [
+                    _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', 'قيد المراجعة والتسعير'),
+                    const SizedBox(height: 8),
+                    _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '$_transferFee ج.م'),
+                    if (_isEmergency) ...[
+                      const SizedBox(height: 8),
+                      _buildPricingRow('رسوم خدمة طوارئ إضافية:', '$_emergencyFee ج.م'),
+                    ],
+                    const Divider(height: 24, thickness: 1),
+                    _buildPricingRow('إجمالي رسوم الدفع المستحقة:', 'قيد المراجعة والتسعير', isTotal: true),
+                    const SizedBox(height: 12),
+                    Text(
+                      'ملاحظة: سيقوم فريق المركز بمراجعة الروشتة وتحديد الفحوصات والأسعار بدقة وسنتصل بك هاتفيًا للتأكيد.',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 11, color: c.accent, height: 1.5, fontWeight: FontWeight.bold),
+                    )
+                  ],
+                )
+              : Column(
+                  children: [
+                    _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', '$_servicesTotal ج.م'),
+                    const SizedBox(height: 8),
+                    _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '$_transferFee ج.م'),
+                    if (_isEmergency) ...[
+                      const SizedBox(height: 8),
+                      _buildPricingRow('رسوم خدمة طوارئ إضافية:', '$_emergencyFee ج.م'),
+                    ],
+                    const Divider(height: 24, thickness: 1),
+                    _buildPricingRow('إجمالي رسوم الدفع المستحقة:', '$_grandTotal ج.م', isTotal: true),
+                  ],
+                ),
         ),
 
         const SizedBox(height: 24),
@@ -1363,7 +1542,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('الدفع نقداً كاش عند وصول الفني', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: c.primary, fontFamily: 'Cairo')),
+                    Text('الدفع نقداً كاش عند وصول فريق المركز', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: c.primary, fontFamily: 'Cairo')),
                     Text('الدفع نقداً كاش هو الوسيلة الحالية. سنضيف خيارات فودافون كاش وبطاقات الدفع قريباً.', style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
                   ],
                 ),

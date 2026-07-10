@@ -269,11 +269,12 @@ class AppColors {
 
   static String getStatusLabel(String status) {
     switch (status) {
+      case 'pending_review': return 'بانتظار التسعير';
       case 'pending':       return 'قيد المراجعة';
-      case 'accepted':      return 'تم القبول';
-      case 'assigned':      return 'تم التعيين';
+      case 'accepted':      return 'تم قبول الطلب';
+      case 'assigned':      return 'تم قبول الطلب';
       case 'on_way':        return 'في الطريق';
-      case 'arrived':       return 'وصل الفني';
+      case 'arrived':       return 'وصل فريق المركز';
       case 'in_progress':   return 'جاري الفحص';
       case 'completed':     return 'اكتمل الفحص';
       case 'report_ready':  return 'التقرير جاهز';

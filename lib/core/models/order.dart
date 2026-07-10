@@ -46,6 +46,23 @@ class OrderReport {
   }
 }
 
+class OrderPrescription {
+  final List<String> images;
+  final String? pdf;
+
+  OrderPrescription({
+    required this.images,
+    this.pdf,
+  });
+
+  factory OrderPrescription.fromJson(Map<String, dynamic> json) {
+    return OrderPrescription(
+      images: List<String>.from(json['images'] ?? []),
+      pdf: json['pdf'],
+    );
+  }
+}
+
 class MedicalOrder {
   final String id;
   final String orderNumber;
@@ -61,8 +78,10 @@ class MedicalOrder {
   final List<OrderStatusLog> statusHistory;
   final MedicalTechnician? technician;
   final OrderReport? report;
+  final OrderPrescription? prescription;
   final double? technicianRating;
   final String? technicianReview;
+  final bool isResultsApproved;
   final DateTime createdAt;
 
   MedicalOrder({
@@ -80,8 +99,10 @@ class MedicalOrder {
     required this.statusHistory,
     this.technician,
     this.report,
+    this.prescription,
     this.technicianRating,
     this.technicianReview,
+    this.isResultsApproved = false,
     required this.createdAt,
   });
 
@@ -107,8 +128,10 @@ class MedicalOrder {
           ? MedicalTechnician.fromJson(json['technician'] as Map<String, dynamic>)
           : null,
       report: json['report'] != null ? OrderReport.fromJson(json['report']) : null,
+      prescription: json['prescription'] != null ? OrderPrescription.fromJson(json['prescription']) : null,
       technicianRating: (json['technicianRating'] as num?)?.toDouble(),
       technicianReview: json['technicianReview'],
+      isResultsApproved: json['isResultsApproved'] ?? false,
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : DateTime.now(),

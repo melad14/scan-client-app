@@ -106,7 +106,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       }
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode;
-      final serverMsg  = e.response?.data?['message'];
+      String? serverMsg;
+      if (e.response?.data is Map) {
+        serverMsg = e.response?.data['message']?.toString();
+      } else if (e.response?.data is String) {
+        serverMsg = e.response?.data as String;
+      }
 
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||

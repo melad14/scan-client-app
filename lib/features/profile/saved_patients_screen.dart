@@ -4,6 +4,7 @@ import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/saved_patient.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:patient_app/core/theme/ui_components.dart';
 import 'package:dio/dio.dart';
 
 class SavedPatientsScreen extends StatefulWidget {
@@ -413,42 +414,50 @@ class _SavedPatientsScreenState extends State<SavedPatientsScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
 
-    return Scaffold(
-      backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.surface,
-        elevation: 0,
-        title: Text(
-          'المرضى المحفوظون',
-          style: TextStyle(color: c.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          context.go('/profile');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: c.background,
+        appBar: AppBar(
+          backgroundColor: c.surface,
+          elevation: 0,
+          title: Text(
+            'المرضى المحفوظون',
+            style: TextStyle(color: c.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go('/profile');
+              }
+            },
+          ),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: c.primary))
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_error!, style: TextStyle(color: c.error, fontFamily: 'Cairo')),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: _fetchPatients,
-                        child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
-                      ),
-                    ],
-                  ),
+              ? ErrorStateWidget(
+                  message: _error!,
+                  onRetry: _fetchPatients,
                 )
               : _patients.isEmpty
-                  ? Center(
-                      child: Text(
-                        'لا يوجد مرضى محفوظون في حسابك حالياً',
-                        style: TextStyle(color: c.textSecondary, fontFamily: 'Cairo'),
-                      ),
+                  ? EmptyStateWidget(
+                      icon: Icons.people_outline_rounded,
+                      title: 'لا يوجد مرضى محفوظون',
+                      description: 'قم بإضافة أفراد عائلتك أو المريض لحجز الفحوصات الطبية لهم بسهولة.',
+                      actionLabel: 'إضافة مريض جديد +',
+                      onAction: () => _showAddEditBottomSheet(),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.all(16),
@@ -590,6 +599,7 @@ class _SavedPatientsScreenState extends State<SavedPatientsScreen> {
         onPressed: () => _showAddEditBottomSheet(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-    );
-  }
+    ),
+  );
+}
 }

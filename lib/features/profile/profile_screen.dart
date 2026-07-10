@@ -106,25 +106,39 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final c = context.colors;
     final isDark = context.isDark;
 
-    return RefreshIndicator(
-      color: c.primary,
-      backgroundColor: c.surface,
-      onRefresh: _fetchProfile,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          // ── Header ──────────────────────────────────────────────
-          SliverToBoxAdapter(child: _buildHeader(c, isDark)),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          context.go('/');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: c.background,
+        body: RefreshIndicator(
+          color: c.primary,
+          backgroundColor: c.surface,
+          onRefresh: _fetchProfile,
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              // ── Header ──────────────────────────────────────────────
+              SliverToBoxAdapter(child: _buildHeader(c, isDark)),
 
-          // ── Content ─────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _isLoading
-                ? _buildLoadingState(c)
-                : _error != null
-                    ? _buildErrorState(c)
-                    : _buildProfileContent(c, isDark),
+              // ── Content ─────────────────────────────────────────────
+              SliverToBoxAdapter(
+                child: _isLoading
+                    ? _buildLoadingState(c)
+                    : _error != null
+                        ? _buildErrorState(c)
+                        : _buildProfileContent(c, isDark),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -326,6 +340,38 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                               Text('العناوين المحفوظة', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.textPrimary, fontFamily: 'Cairo')),
                               const SizedBox(height: 3),
                               Text('عناوين الزيارات المنزلية المفضلة', style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
+                            ],
+                          ),
+                        ),
+                        Icon(Icons.arrow_forward_ios_rounded, color: c.textMuted, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: Container(height: 1, color: c.borderLight),
+                ),
+                GestureDetector(
+                  onTap: () => context.push('/profile/complaints'),
+                  behavior: HitTestBehavior.opaque,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40, height: 40,
+                          decoration: BoxDecoration(color: c.primaryLight, borderRadius: BorderRadius.circular(12)),
+                          child: Icon(Icons.warning_amber_rounded, color: c.primary, size: 18),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('شكاواي واعتراضاتي', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: c.textPrimary, fontFamily: 'Cairo')),
+                              const SizedBox(height: 3),
+                              Text('متابعة حالة الشكاوى والاعتراضات المرسلة', style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo')),
                             ],
                           ),
                         ),

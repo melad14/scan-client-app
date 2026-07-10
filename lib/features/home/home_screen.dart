@@ -10,6 +10,7 @@ import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/theme_provider.dart';
+import 'package:patient_app/core/theme/ui_components.dart';
 import 'package:patient_app/features/profile/profile_screen.dart';
 import 'package:dio/dio.dart';
 
@@ -90,26 +91,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   }
 
   Future<void> _fetchOrders() async {
+    // Try to load cached orders first to show them immediately
+    if (_orders.isEmpty) {
+      final cached = await StorageService.getCachedOrders();
+      if (cached != null && mounted) {
+        setState(() {
+          _orders = cached.map((item) => MedicalOrder.fromJson(item)).toList();
+        });
+      }
+    }
+
     setState(() { _isLoadingOrders = true; _ordersError = null; });
     try {
       final endpoint = '${Constants.ordersHistory}?status=$_statusFilter&search=${_searchController.text}';
       final res = await _api.dio.get(endpoint);
       if (res.statusCode == 200) {
         final List list = res.data['data'] ?? [];
-        if (mounted) setState(() => _orders = list.map((item) => MedicalOrder.fromJson(item)).toList());
+        if (mounted) {
+          setState(() {
+            _orders = list.map((item) => MedicalOrder.fromJson(item)).toList();
+          });
+        }
+        // Save to cache
+        await StorageService.saveCachedOrders(list);
       }
     } on DioException catch (e) {
       if (mounted) {
         if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
-          setState(() => _ordersError = 'تعذر الاتصال. تحقق من الإنترنت.');
+          if (_orders.isNotEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('أنت غير متصل بالإنترنت. يتم عرض البيانات المحفوظة محلياً.')),
+            );
+          } else {
+            setState(() => _ordersError = 'تعذر الاتصال. تحقق من الإنترنت.');
+          }
         } else if ((e.response?.statusCode ?? 0) >= 500) {
-          setState(() => _ordersError = 'خطأ في الخادم. اسحب للأسفل للإعادة.');
+          if (_orders.isEmpty) setState(() => _ordersError = 'خطأ في الخادم. اسحب للأسفل للإعادة.');
         } else {
-          setState(() => _ordersError = 'حدث خطأ أثناء تحميل الطلبات.');
+          if (_orders.isEmpty) setState(() => _ordersError = 'حدث خطأ أثناء تحميل الطلبات.');
         }
       }
     } catch (_) {
-      if (mounted) setState(() => _ordersError = 'حدث خطأ غير متوقع.');
+      if (mounted && _orders.isEmpty) setState(() => _ordersError = 'حدث خطأ غير متوقع.');
     } finally {
       if (mounted) setState(() => _isLoadingOrders = false);
     }
@@ -211,7 +234,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
         },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'طلباتي'),
+          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'السجل المرضي'),
           BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'حسابي'),
         ],
       ),
@@ -254,40 +277,109 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
             ),
           ),
 
+          // ── Prescription Upload Card (New) ────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: GestureDetector(
+                onTap: () => context.push('/orders/create?category=prescription_only'),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [c.primary, c.primaryDeep],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: [
+                      BoxShadow(
+                        color: c.primary.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.note_add_rounded, color: Colors.white, size: 28),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'مش عارف فحصك؟ احجز بالروشتة مباشرة',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'ارفع صورة الروشتة وسنتصل بك لتأكيد طلبك وتحديد الفحص والسعر',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.9),
+                                fontSize: 11,
+                                height: 1.5,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           // ── Service Cards Grid (Dynamic) ────────────────────
           if (_isLoadingCategories)
-            const SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: CircularProgressIndicator(),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(60.0),
+                child: Center(
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(c.primary),
+                    ),
+                  ),
                 ),
               ),
             )
           else if (_categoriesError != null)
             SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    children: [
-                      Text(_categoriesError!, style: TextStyle(color: c.textSecondary, fontFamily: 'Cairo', fontSize: 14)),
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: _fetchCategories,
-                        child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
-                      ),
-                    ],
-                  ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24.0),
+                child: ErrorStateWidget(
+                  message: _categoriesError!,
+                  onRetry: _fetchCategories,
                 ),
               ),
             )
           else if (_categories.isEmpty)
             const SliverToBoxAdapter(
-              child: Center(
-                child: Padding(
-                  padding: EdgeInsets.all(40),
-                  child: Text('لا توجد أقسام متاحة حالياً', style: TextStyle(fontFamily: 'Cairo', color: Colors.grey)),
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 24.0),
+                child: EmptyStateWidget(
+                  icon: Icons.grid_view_rounded,
+                  title: 'لا توجد أقسام متاحة',
+                  description: 'لا توجد تخصصات أو خدمات مفعلة حالياً في التطبيق. يرجى التحقق لاحقاً.',
                 ),
               ),
             )
@@ -431,7 +523,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
             ],
           ),
           const SizedBox(height: 6),
-          const Text('احجز فحصك وهيجيلك الفني في بيتك 🏠',
+          const Text('احجز فحصك وهيجيلك فريق المركز لغاية البيت 🏠',
               style: TextStyle(fontSize: 14, color: Color(0xCCFFFFFF), height: 1.6)),
           const SizedBox(height: 4),
         ],
@@ -456,7 +548,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
           ),
           child: Column(
             children: [
-              Text('طلباتي', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textPrimary)),
+              Text('السجل المرضي', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textPrimary)),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -539,40 +631,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   }
 
   Widget _buildErrorState(String message) {
-    final c = context.colors;
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 72, height: 72,
-                    decoration: BoxDecoration(color: c.errorBg, borderRadius: BorderRadius.circular(20)),
-                    child: Icon(Icons.wifi_off_rounded, color: c.error, size: 36),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(message, style: TextStyle(fontSize: 15, color: c.textSecondary), textAlign: TextAlign.center),
-                  const SizedBox(height: 8),
-                  Text('↑ اسحب للأسفل لإعادة المحاولة', style: TextStyle(fontSize: 11, color: c.textMuted)),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: _fetchOrders,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 13),
-                      decoration: BoxDecoration(color: c.primary, borderRadius: BorderRadius.circular(12),
-                          boxShadow: c.primaryGlow),
-                      child: const Text('إعادة المحاولة',
-                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
-                    ),
-                  ),
-                ],
-              ),
+            child: ErrorStateWidget(
+              message: message,
+              onRetry: _fetchOrders,
             ),
           ),
         ),
@@ -581,54 +648,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   }
 
   Widget _buildEmptyState() {
-    final c = context.colors;
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       slivers: [
         SliverFillRemaining(
           hasScrollBody: false,
           child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(40),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 80, height: 80,
-                    decoration: BoxDecoration(color: c.primaryLight, borderRadius: BorderRadius.circular(24)),
-                    child: Icon(Icons.receipt_long_rounded, color: c.primary, size: 40),
-                  ),
-                  const SizedBox(height: 20),
-                  Text('لا توجد طلبات بعد',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.textPrimary)),
-                  const SizedBox(height: 8),
-                  Text('طلباتك الطبية هتظهر هنا بعد أول حجز',
-                      style: TextStyle(fontSize: 14, color: c.textSecondary, height: 1.7), textAlign: TextAlign.center),
-                  const SizedBox(height: 12),
-                  Text('↑ اسحب للأسفل للتحديث', style: TextStyle(fontSize: 11, color: c.textMuted)),
-                  const SizedBox(height: 20),
-                  GestureDetector(
-                    onTap: () => setState(() { _currentTab = 0; _tabAnimController.forward(from: 0); }),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      decoration: BoxDecoration(
-                        color: c.primary,
-                        borderRadius: BorderRadius.circular(14),
-                        boxShadow: c.primaryGlow,
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add_rounded, color: Colors.white, size: 20),
-                          SizedBox(width: 8),
-                          Text('اطلب خدمة الآن',
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFamily: 'Cairo', fontSize: 15)),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: EmptyStateWidget(
+              icon: Icons.receipt_long_rounded,
+              title: 'لا توجد طلبات بعد',
+              description: 'طلباتك الطبية والزيارات المحجوزة ستظهر هنا بعد أول عملية حجز.',
+              actionLabel: 'تصفح الخدمات والتحاليل',
+              onAction: () {
+                // Switch to home services tab (Tab 0)
+                setState(() { _currentTab = 0; });
+              },
             ),
           ),
         ),

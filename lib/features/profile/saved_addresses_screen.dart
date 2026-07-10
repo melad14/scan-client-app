@@ -4,6 +4,7 @@ import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/saved_address.dart';
 import 'package:patient_app/core/utils/constants.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:patient_app/core/theme/ui_components.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -488,42 +489,50 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
   Widget build(BuildContext context) {
     final c = context.colors;
 
-    return Scaffold(
-      backgroundColor: c.background,
-      appBar: AppBar(
-        backgroundColor: c.surface,
-        elevation: 0,
-        title: Text(
-          'العناوين المحفوظة',
-          style: TextStyle(color: c.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (Navigator.of(context).canPop()) {
+          Navigator.of(context).pop();
+        } else {
+          context.go('/profile');
+        }
+      },
+      child: Scaffold(
+        backgroundColor: c.background,
+        appBar: AppBar(
+          backgroundColor: c.surface,
+          elevation: 0,
+          title: Text(
+            'العناوين المحفوظة',
+            style: TextStyle(color: c.textPrimary, fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 18),
+          ),
+          leading: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
+            onPressed: () {
+              if (Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              } else {
+                context.go('/profile');
+              }
+            },
+          ),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: c.textPrimary, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: c.primary))
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(_error!, style: TextStyle(color: c.error, fontFamily: 'Cairo')),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        onPressed: _fetchAddresses,
-                        child: const Text('إعادة المحاولة', style: TextStyle(fontFamily: 'Cairo')),
-                      ),
-                    ],
-                  ),
+              ? ErrorStateWidget(
+                  message: _error!,
+                  onRetry: _fetchAddresses,
                 )
               : _addresses.isEmpty
-                  ? Center(
-                      child: Text(
-                        'لا يوجد عناوين محفوظة في حسابك حالياً',
-                        style: TextStyle(color: c.textSecondary, fontFamily: 'Cairo'),
-                      ),
+                  ? EmptyStateWidget(
+                      icon: Icons.location_on_outlined,
+                      title: 'لا توجد عناوين محفوظة',
+                      description: 'قم بإضافة عناوين منزلك أو عملك لتتمكن من تحديد موقع زيارة فريق المركز بسهولة.',
+                      actionLabel: 'إضافة عنوان جديد +',
+                      onAction: () => _showAddEditBottomSheet(),
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.all(16),
@@ -640,6 +649,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         onPressed: () => _showAddEditBottomSheet(),
         child: const Icon(Icons.add, color: Colors.white),
       ),
-    );
-  }
+    ),
+  );
+}
 }
