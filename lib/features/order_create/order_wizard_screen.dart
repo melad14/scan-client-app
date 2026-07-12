@@ -11,6 +11,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:image_picker/image_picker.dart';
 
 class OrderWizardScreen extends StatefulWidget {
   final String category;
@@ -51,6 +52,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   bool _hasPrescription = false;
   String? _prescriptionFilename;
   bool _instructionsConfirmed = false;
+  bool _isUploadingImage = false;
 
   // Timing
   String _scheduleDate = 'today'; // today, tomorrow
@@ -279,6 +281,63 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       setState(() => _errorMessage = msg);
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickAndUploadPrescription() async {
+    if (_isUploadingImage) return;
+
+    final ImagePicker picker = ImagePicker();
+    try {
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+
+      if (image == null) return;
+
+      setState(() {
+        _isUploadingImage = true;
+        _errorMessage = null;
+      });
+
+      final bytes = await image.readAsBytes();
+      final multipartFile = MultipartFile.fromBytes(
+        bytes,
+        filename: image.name,
+      );
+
+      final formData = FormData.fromMap({
+        'prescription': multipartFile,
+      });
+
+      final res = await _api.dio.post(
+        '/upload/prescription',
+        data: formData,
+      );
+
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        setState(() {
+          _prescriptionFilename = res.data['data']['url'];
+          _hasPrescription = true;
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم رفع الروشتة بنجاح!')),
+          );
+        }
+      } else {
+        setState(() => _errorMessage = 'فشل في رفع الملف، يرجى المحاولة مرة أخرى.');
+      }
+    } catch (e) {
+      debugPrint('Error uploading prescription: $e');
+      setState(() => _errorMessage = 'حدث خطأ أثناء رفع الروشتة الطبية.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
     }
   }
 
@@ -1334,15 +1393,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         
         Center(
           child: GestureDetector(
-            onTap: () {
-              setState(() {
-                _hasPrescription = true;
-                _prescriptionFilename = 'prescription_${DateTime.now().millisecondsSinceEpoch.toString().substring(8)}.jpg';
-              });
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('تم إرفاق الملف $_prescriptionFilename بنجاح!')),
-              );
-            },
+            onTap: (_hasPrescription || _isUploadingImage) ? null : _pickAndUploadPrescription,
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 24),
@@ -1354,29 +1405,46 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(
-                    _hasPrescription ? Icons.file_present_rounded : Icons.camera_alt_outlined,
-                    size: 40,
-                    color: _hasPrescription ? c.primary : c.textSecondary,
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    _hasPrescription ? _prescriptionFilename! : 'اضغط لالتقاط أو إرفاق صورة الروشتة',
-                    style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: _hasPrescription ? c.primary : c.textSecondary, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  if (_hasPrescription) ...[
-                    const SizedBox(height: 6),
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _hasPrescription = false;
-                          _prescriptionFilename = null;
-                        });
-                      },
-                      child: const Text('حذف وإعادة إرفاق', style: TextStyle(color: Colors.red, fontSize: 11, fontFamily: 'Cairo')),
-                    )
-                  ]
+                  if (_isUploadingImage) ...[
+                    SizedBox(
+                      width: 32,
+                      height: 32,
+                      child: CircularProgressIndicator(color: c.primary, strokeWidth: 3),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'جاري رفع الصورة...',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: c.primary, fontWeight: FontWeight.bold),
+                    ),
+                  ] else ...[
+                    Icon(
+                      _hasPrescription ? Icons.file_present_rounded : Icons.camera_alt_outlined,
+                      size: 40,
+                      color: _hasPrescription ? c.primary : c.textSecondary,
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _hasPrescription
+                          ? (_prescriptionFilename!.contains('/')
+                              ? _prescriptionFilename!.split('/').last
+                              : _prescriptionFilename!)
+                          : 'اضغط لالتقاط أو إرفاق صورة الروشتة',
+                      style: TextStyle(fontFamily: 'Cairo', fontSize: 13, color: _hasPrescription ? c.primary : c.textSecondary, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    if (_hasPrescription) ...[
+                      const SizedBox(height: 12),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _hasPrescription = false;
+                            _prescriptionFilename = null;
+                          });
+                        },
+                        child: const Text('حذف وإعادة إرفاق', style: TextStyle(color: Colors.red, fontSize: 11, fontFamily: 'Cairo')),
+                      )
+                    ]
+                  ],
                 ],
               ),
             ),
