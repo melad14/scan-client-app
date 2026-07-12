@@ -50,6 +50,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   // Simulated prescription upload state
   bool _hasPrescription = false;
   String? _prescriptionFilename;
+  bool _instructionsConfirmed = false;
 
   // Timing
   String _scheduleDate = 'today'; // today, tomorrow
@@ -254,7 +255,8 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           'timeSlot': _timeSlot,
           'isEmergency': _isEmergency
         },
-        'paymentMethod': 'cash'
+        'paymentMethod': 'cash',
+        'instructionsAcknowledged': _instructionsConfirmed
       };
 
       final res = await _api.dio.post(Constants.orders, data: payload);
@@ -278,6 +280,143 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  void _showInstructionsBottomSheet(BuildContext context, List<MedicalService> services) {
+    final c = context.colors;
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          padding: EdgeInsets.only(
+            top: 20,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: c.textMuted.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: c.warning, size: 24),
+                  const SizedBox(width: 8),
+                  Text(
+                    'تعليمات طبية هامة قبل إجراء الفحص',
+                    style: TextStyle(
+                      fontFamily: 'Cairo',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: c.warning,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'يرجى تأكيد التزامك بالتحضيرات الطبية لضمان دقة التحليل وتجنب إلغاء الزيارة المنزلية:',
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 13,
+                  color: c.textSecondary,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: services.map((s) => Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: c.borderLight.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: c.borderLight),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            s.nameAr,
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: c.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            s.instructionsAr,
+                            style: TextStyle(
+                              fontFamily: 'Cairo',
+                              fontSize: 12,
+                              color: c.textSecondary,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )).toList(),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: c.primary,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _instructionsConfirmed = true;
+                  });
+                  Navigator.pop(context);
+                  _nextStep();
+                },
+                child: const Text(
+                  'أؤكد قراءة التعليمات والالتزام بها',
+                  style: TextStyle(
+                    fontFamily: 'Cairo',
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _nextStep() {
@@ -308,6 +447,14 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         // If catalog has services, require at least one. If empty, allow continuing with prescription.
         if (_servicesCatalog.isNotEmpty && _selectedServiceIds.isEmpty && !_hasPrescription) {
           setState(() => _errorMessage = 'يرجى تحديد خدمة واحدة على الأقل أو إرفاق الروشتة');
+          return;
+        }
+
+        // Verify medical instructions are confirmed if present
+        final selectedServices = _servicesCatalog.where((s) => _selectedServiceIds.contains(s.id)).toList();
+        final servicesWithInstructions = selectedServices.where((s) => s.instructionsAr.isNotEmpty).toList();
+        if (servicesWithInstructions.isNotEmpty && !_instructionsConfirmed) {
+          _showInstructionsBottomSheet(context, servicesWithInstructions);
           return;
         }
       }
@@ -1107,6 +1254,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
   Widget _buildStep2WhatServices() {
     final c = context.colors;
     final isPrescriptionOnly = widget.category == 'prescription_only';
+    final selectedServices = _servicesCatalog.where((s) => _selectedServiceIds.contains(s.id)).toList();
+    final servicesWithInstructions = selectedServices.where((s) => s.instructionsAr.isNotEmpty).toList();
+    final hasInstructions = servicesWithInstructions.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1158,6 +1308,8 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                       } else {
                         _selectedServiceIds.remove(service.id);
                       }
+                      // Reset acknowledgment if services list changes
+                      _instructionsConfirmed = false;
                     });
                   },
                 ),

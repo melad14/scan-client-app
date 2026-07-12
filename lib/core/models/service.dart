@@ -5,6 +5,8 @@ class MedicalService {
   final String category;
   final double price;
   final String description;
+  final String instructionsAr;
+  final String instructionsEn;
 
   MedicalService({
     required this.id,
@@ -13,6 +15,8 @@ class MedicalService {
     required this.category,
     required this.price,
     this.description = '',
+    this.instructionsAr = '',
+    this.instructionsEn = '',
   });
 
   factory MedicalService.fromJson(Map<String, dynamic> json) {
@@ -23,6 +27,8 @@ class MedicalService {
       category: json['category'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       description: json['description'] ?? '',
+      instructionsAr: json['instructionsAr'] ?? '',
+      instructionsEn: json['instructionsEn'] ?? '',
     );
   }
 
@@ -34,6 +40,8 @@ class MedicalService {
       'category': category,
       'price': price,
       'description': description,
+      'instructionsAr': instructionsAr,
+      'instructionsEn': instructionsEn,
     };
   }
 }
