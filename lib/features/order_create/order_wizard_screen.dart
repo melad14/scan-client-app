@@ -12,6 +12,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http_parser/http_parser.dart';
 
 class OrderWizardScreen extends StatefulWidget {
   final String category;
@@ -302,9 +303,21 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       });
 
       final bytes = await image.readAsBytes();
+      
+      final ext = image.name.split('.').last.toLowerCase();
+      MediaType mediaType;
+      if (ext == 'png') {
+        mediaType = MediaType('image', 'png');
+      } else if (ext == 'pdf') {
+        mediaType = MediaType('application', 'pdf');
+      } else {
+        mediaType = MediaType('image', 'jpeg');
+      }
+
       final multipartFile = MultipartFile.fromBytes(
         bytes,
         filename: image.name,
+        contentType: mediaType,
       );
 
       final formData = FormData.fromMap({
@@ -331,7 +344,14 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       }
     } catch (e) {
       debugPrint('Error uploading prescription: $e');
-      setState(() => _errorMessage = 'حدث خطأ أثناء رفع الروشتة الطبية.');
+      String msg = 'حدث خطأ أثناء رفع الروشتة الطبية.';
+      if (e is DioException) {
+        final serverMsg = e.response?.data?['message'];
+        if (serverMsg != null && serverMsg.toString().isNotEmpty) {
+          msg = serverMsg.toString();
+        }
+      }
+      setState(() => _errorMessage = msg);
     } finally {
       if (mounted) {
         setState(() {
