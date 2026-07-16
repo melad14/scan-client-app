@@ -15,7 +15,8 @@ import 'package:patient_app/features/profile/profile_screen.dart';
 import 'package:dio/dio.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  final String? completedOrderId;
+  const HomeScreen({super.key, this.completedOrderId});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -37,6 +38,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   bool _isLoadingCategories = false;
   String? _categoriesError;
 
+  String? _lastShownCompletedOrderId;
   final _api = ApiClient();
   late AnimationController _tabAnimController;
   late Animation<double> _tabFade;
@@ -53,6 +55,85 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     
     // Register FCM Device Token for notifications
     NotificationService.registerDeviceToken();
+    _checkCompletedOrder();
+  }
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _checkCompletedOrder();
+  }
+
+  void _checkCompletedOrder() {
+    if (widget.completedOrderId != null && widget.completedOrderId != _lastShownCompletedOrderId) {
+      _lastShownCompletedOrderId = widget.completedOrderId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showCompletedOrderDialog(widget.completedOrderId!);
+      });
+    }
+  }
+
+  void _showCompletedOrderDialog(String orderId) {
+    final c = context.colors;
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'تم اكتمال الفحص 🎉',
+          style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+          textAlign: TextAlign.center,
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle_rounded, color: Colors.green, size: 54),
+            SizedBox(height: 16),
+            Text(
+              'تم الانتهاء من الفحص الطبي ورفع النتائج بنجاح! هل تريد عرض نتائج الفحص الآن؟',
+              style: TextStyle(fontFamily: 'Cairo', height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actionsAlignment: MainAxisAlignment.center,
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.go('/');
+                  },
+                  child: const Text('الرئيسية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: c.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.go('/');
+                    context.push('/orders/$orderId');
+                  },
+                  child: const Text('عرض النتائج', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _fetchCategories() async {

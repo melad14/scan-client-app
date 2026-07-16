@@ -25,6 +25,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   bool _isSubmittingRating = false;
   bool _isCancelling = false;
   Timer? _pollingTimer;
+  final ScrollController _scrollController = ScrollController();
 
   final _api = ApiClient();
 
@@ -40,6 +41,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   void dispose() {
     _pollingTimer?.cancel();
     _reviewController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -149,7 +151,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             timer.cancel();
             setState(() => _order = newOrder);
             if (mounted) {
-              _showCompletionDialog();
+              context.go('/?completedOrderId=${widget.orderId}');
             }
           } else {
             setState(() => _order = newOrder);
@@ -171,24 +173,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           textAlign: TextAlign.center,
         ),
         content: const Text(
-          'تم الانتهاء من الفحص الطبي بنجاح! يمكنك الآن العودة للرئيسية ومتابعة تقاريرك الطبية.',
+          'تم الانتهاء من الفحص الطبي بنجاح! يمكنك العودة للرئيسية أو الانتقال لنتائج الفحص مباشرة.',
           style: TextStyle(fontFamily: 'Cairo', height: 1.5),
           textAlign: TextAlign.center,
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: context.colors.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(ctx);
-              context.go('/');
-            },
-            child: const Text('العودة للرئيسية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
-          )
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    context.go('/');
+                  },
+                  child: const Text('الرئيسية', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: context.colors.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    Future.delayed(const Duration(milliseconds: 100), () {
+                      if (_scrollController.hasClients) {
+                        _scrollController.animateTo(
+                          _scrollController.position.maxScrollExtent,
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOut,
+                        );
+                      }
+                    });
+                  },
+                  child: const Text('نتائج الفحص', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -427,6 +456,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     final statusLabel = AppColors.getStatusLabel(order.status);
 
     return ListView(
+      controller: _scrollController,
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(16),
       children: [

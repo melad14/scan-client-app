@@ -41,7 +41,10 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/',
-      builder: (BuildContext context, GoRouterState state) => const HomeScreen(),
+      builder: (BuildContext context, GoRouterState state) {
+        final completedOrderId = state.uri.queryParameters['completedOrderId'];
+        return HomeScreen(completedOrderId: completedOrderId);
+      },
     ),
     GoRoute(
       path: '/orders/create',
