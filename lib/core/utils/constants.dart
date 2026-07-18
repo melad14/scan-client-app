@@ -25,6 +25,7 @@ class Constants {
   static const String ordersHistory = '/orders/history';
   static const String savedPatients = '/patients/saved';
   static const String savedAddresses = '/addresses/saved';
+  static const String notifications = '/notifications';
 
   // ─── Technician App Endpoints ────────────────────────────────────────────────
   static const String techAvailableOrders = '/technician/orders/available';

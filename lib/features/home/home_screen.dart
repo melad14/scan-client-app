@@ -42,6 +42,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   final _api = ApiClient();
   late AnimationController _tabAnimController;
   late Animation<double> _tabFade;
+  int _unreadNotificationsCount = 0;
+
+  Future<void> _fetchUnreadCount() async {
+    try {
+      final res = await _api.dio.get('/notifications');
+      if (res.statusCode == 200 && mounted) {
+        final List list = res.data['data'] ?? [];
+        final count = list.where((item) => item['isRead'] == false).length;
+        setState(() {
+          _unreadNotificationsCount = count;
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch notifications unread count: $e');
+    }
+  }
 
   @override
   void initState() {
@@ -52,6 +68,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     _loadUserInfo();
     _fetchCategories();
     _fetchOrders();
+    _fetchUnreadCount();
     
     // Register FCM Device Token for notifications
     NotificationService.registerDeviceToken();
@@ -333,6 +350,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       onRefresh: () async {
         await _loadUserInfo();
         await _fetchCategories();
+        await _fetchUnreadCount();
       },
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -563,6 +581,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
               // ── Actions (Theme Toggle + Logout) ──────────
               Row(
                 children: [
+                  // Notifications Button
+                  GestureDetector(
+                    onTap: () async {
+                      await context.push('/notifications');
+                      // Re-fetch unread count when returning to Home screen
+                      _fetchUnreadCount();
+                    },
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          width: 38, height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.white.withOpacity(0.25)),
+                          ),
+                          child: const Icon(Icons.notifications_rounded, color: Colors.white, size: 18),
+                        ),
+                        if (_unreadNotificationsCount > 0)
+                          Positioned(
+                            top: -4,
+                            right: -4,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: context.colors.accent,
+                                shape: BoxShape.circle,
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                '$_unreadNotificationsCount',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.bold,
+                                  fontFamily: 'Inter',
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   // Theme Toggle Button
                   _ThemeToggleButton(),
                   const SizedBox(width: 8),
