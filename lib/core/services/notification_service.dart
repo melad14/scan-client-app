@@ -119,17 +119,26 @@ class NotificationService {
     );
   }
 
+  static bool _isNavigating = false;
+
   // ── Navigate to the relevant screen based on notification data ──────────────
   static void _handleNotificationTap(Map<String, dynamic> data) {
+    if (_isNavigating) return;
+    _isNavigating = true;
+    Future.delayed(const Duration(milliseconds: 1500), () {
+      _isNavigating = false;
+    });
+
     final orderId = data['orderId'] as String?;
     final context = notificationNavigatorKey.currentContext;
     if (context == null) return;
 
     if (orderId != null && orderId.isNotEmpty) {
-      // Go to the specific order detail screen
-      GoRouter.of(context).push('/orders/$orderId');
+      final currentRoute = GoRouterState.of(context).matchedLocation;
+      if (currentRoute != '/orders/$orderId') {
+        GoRouter.of(context).push('/orders/$orderId');
+      }
     } else {
-      // Fallback: go to home
       GoRouter.of(context).go('/');
     }
   }

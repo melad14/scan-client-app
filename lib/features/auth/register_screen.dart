@@ -94,15 +94,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       });
 
       if (res.statusCode == 201 && res.data['success'] == true) {
-        await StorageService.saveAccessToken(res.data['data']['accessToken']);
-        await StorageService.saveRefreshToken(res.data['data']['refreshToken']);
-        await StorageService.saveUserRole('patient');
-        await StorageService.saveUserData(res.data['data']['user']);
-        
-        // Register Push Notification Token
-        await NotificationService.registerDeviceToken();
+        final userId = res.data['data']['userId']?.toString() ?? '';
+        final userEmail = res.data['data']['email']?.toString() ?? email;
 
-        if (mounted) context.go('/');
+        if (mounted) {
+          context.go('/verify-email', extra: {'userId': userId, 'email': userEmail});
+        }
       }
     } on DioException catch (e) {
       final statusCode = e.response?.statusCode;

@@ -90,6 +90,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.connectionError) {
         setState(() => _errorMessage = 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
+      } else if (statusCode == 403 && e.response?.data is Map && e.response?.data['code'] == 'EMAIL_NOT_VERIFIED') {
+        final data = e.response?.data['data'];
+        final userId = data?['userId']?.toString() ?? '';
+        final email = data?['email']?.toString();
+        if (mounted && userId.isNotEmpty) {
+          context.go('/verify-email', extra: {'userId': userId, 'email': email});
+        } else {
+          setState(() => _errorMessage = serverMsg ?? 'البريد الإلكتروني غير مفعّل.');
+        }
       } else if (statusCode == 401) {
         setState(() => _errorMessage = 'اسم المستخدم أو كلمة المرور غير صحيحة');
       } else if (statusCode == 429) {

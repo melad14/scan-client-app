@@ -10,6 +10,8 @@ class Constants {
   // ─── Patient Auth Endpoints ─────────────────────────────────────────────────
   static const String patientRegister = '/auth/patient/register';
   static const String patientLogin = '/auth/patient/login';
+  static const String verifyEmail = '/auth/verify-email';
+  static const String resendVerification = '/auth/resend-verification';
 
   // ─── Shared Auth Endpoints ──────────────────────────────────────────────────
   static const String refreshToken = '/auth/refresh-token';

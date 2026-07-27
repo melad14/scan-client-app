@@ -17,6 +17,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   List<dynamic> _notifications = [];
   bool _isLoading = true;
   String? _error;
+  final Set<String> _loadingNotificationIds = {};
 
   @override
   void initState() {
@@ -59,8 +60,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _markAsRead(String id, String? orderId) async {
+    if (_loadingNotificationIds.contains(id)) return;
+    setState(() {
+      _loadingNotificationIds.add(id);
+    });
+
     try {
-      // Optimitic local UI update
+      // Optimistic local UI update
       setState(() {
         for (var noti in _notifications) {
           if (noti['_id'] == id) {
@@ -73,10 +79,19 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await _api.dio.put('/notifications/$id/read');
     } catch (e) {
       debugPrint('Failed to mark notification as read: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingNotificationIds.remove(id);
+        });
+      }
     }
 
     if (mounted && orderId != null && orderId.isNotEmpty) {
-      context.push('/orders/$orderId');
+      final currentRoute = GoRouterState.of(context).matchedLocation;
+      if (currentRoute != '/orders/$orderId') {
+        context.push('/orders/$orderId');
+      }
     }
   }
 
@@ -291,11 +306,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                             color: _getNotificationBg(type, c),
                                             shape: BoxShape.circle,
                                           ),
-                                          child: Icon(
-                                            _getNotificationIcon(type),
-                                            color: _getNotificationColor(type, c),
-                                            size: 24,
-                                          ),
+                                          child: _loadingNotificationIds.contains(id)
+                                              ? Center(
+                                                  child: SizedBox(
+                                                    width: 20,
+                                                    height: 20,
+                                                    child: CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: _getNotificationColor(type, c),
+                                                    ),
+                                                  ),
+                                                )
+                                              : Icon(
+                                                  _getNotificationIcon(type),
+                                                  color: _getNotificationColor(type, c),
+                                                  size: 24,
+                                                ),
                                         ),
                                         const SizedBox(width: 14),
                                         // Title and Body

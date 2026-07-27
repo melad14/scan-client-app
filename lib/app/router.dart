@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
+import '../features/auth/verify_email_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/order_create/order_wizard_screen.dart';
 import '../features/order_detail/order_detail_screen.dart';
@@ -19,13 +20,15 @@ final GoRouter appRouter = GoRouter(
   initialLocation: '/',
   redirect: (BuildContext context, GoRouterState state) async {
     final token = await StorageService.getAccessToken();
-    final isLoggingIn = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+    final isLoggingIn = state.matchedLocation == '/login' ||
+        state.matchedLocation == '/register' ||
+        state.matchedLocation == '/verify-email';
 
     if (token == null && !isLoggingIn) {
       return '/login';
     }
     
-    if (token != null && isLoggingIn) {
+    if (token != null && isLoggingIn && state.matchedLocation != '/verify-email') {
       return '/';
     }
     
@@ -39,6 +42,15 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/register',
       builder: (BuildContext context, GoRouterState state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/verify-email',
+      builder: (BuildContext context, GoRouterState state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        final userId = extra?['userId'] ?? state.uri.queryParameters['userId'] ?? '';
+        final email = extra?['email'] ?? state.uri.queryParameters['email'];
+        return VerifyEmailScreen(userId: userId, email: email);
+      },
     ),
     GoRoute(
       path: '/',
