@@ -6,6 +6,7 @@ import 'package:patient_app/core/models/saved_patient.dart';
 import 'package:patient_app/core/models/saved_address.dart';
 import 'package:patient_app/core/models/category.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/utils/app_snackbar.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
@@ -265,9 +266,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       final res = await _api.dio.post(Constants.orders, data: payload);
       if (res.statusCode == 201) {
         final orderId = res.data['data']['_id'];
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم تسجيل الطلب وإرساله للإدارة بنجاح!')),
-        );
+        AppSnackBar.show(context, message: 'تم تسجيل الطلب وإرساله للإدارة بنجاح!', type: SnackType.success);
         context.go('/orders/$orderId?fromWizard=true');
       }
     } catch (e) {
@@ -335,9 +334,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           _hasPrescription = true;
         });
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم رفع الروشتة بنجاح!')),
-          );
+          AppSnackBar.show(context, message: 'تم رفع الروشتة بنجاح!', type: SnackType.success);
         }
       } else {
         setState(() => _errorMessage = 'فشل في رفع الملف، يرجى المحاولة مرة أخرى.');

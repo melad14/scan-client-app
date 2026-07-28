@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/order.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/utils/app_snackbar.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
@@ -122,13 +123,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       try {
         final res = await _api.dio.put('${Constants.orders}/${widget.orderId}/cancel');
         if (res.statusCode == 200 && mounted) {
-          _showSnack('✅ تم إلغاء الطلب بنجاح', success: true);
+          AppSnackBar.show(context, message: '✅ تم إلغاء الطلب بنجاح', type: SnackType.success);
           _fetchDetails();
         }
       } on DioException catch (e) {
-        _showSnack(e.response?.data?['message'] ?? 'لا يمكن إلغاء الطلب في هذه المرحلة.', success: false);
+        if (mounted) AppSnackBar.show(context, message: e.response?.data?['message'] ?? 'لا يمكن إلغاء الطلب في هذه المرحلة.', type: SnackType.error);
       } catch (_) {
-        _showSnack('حدث خطأ. حاول مرة أخرى.', success: false);
+        if (mounted) AppSnackBar.show(context, message: 'حدث خطأ. حاول مرة أخرى.', type: SnackType.error);
       } finally {
         if (mounted) setState(() => _isCancelling = false);
       }
@@ -288,7 +289,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                                 final res = await _api.dio.post('/complaints', data: payload);
                                 if (res.statusCode == 201) {
                                   Navigator.pop(context);
-                                  _showSnack('✅ تم إرسال شكواك وجاري مراجعتها من قبل الإدارة', success: true);
+                                  AppSnackBar.show(context, message: 'تم إرسال شكواك وجاري مراجعتها من قبل الإدارة', type: SnackType.success);
                                 }
                               } on DioException catch (e) {
                                 setModalState(() {
@@ -325,13 +326,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
         'review': _reviewController.text.trim(),
       });
       if (res.statusCode == 200 && mounted) {
-        _showSnack('⭐ شكراً لتقييمك!', success: true);
+        AppSnackBar.show(context, message: '⭐ شكراً لتقييمك!', type: SnackType.success);
         _fetchDetails();
       }
     } on DioException catch (e) {
-      _showSnack(e.response?.data?['message'] ?? 'فشل إرسال التقييم.', success: false);
+      if (mounted) AppSnackBar.show(context, message: e.response?.data?['message'] ?? 'فشل إرسال التقييم.', type: SnackType.error);
     } catch (_) {
-      _showSnack('حدث خطأ. حاول مرة أخرى.', success: false);
+      if (mounted) AppSnackBar.show(context, message: 'حدث خطأ. حاول مرة أخرى.', type: SnackType.error);
     } finally {
       if (mounted) setState(() => _isSubmittingRating = false);
     }
@@ -699,7 +700,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ],
                 if (order.report!.pdf != null)
                   GestureDetector(
-                    onTap: () => _showSnack('سيتم دعم عرض PDF قريباً', success: true),
+                    onTap: () => AppSnackBar.show(context, message: 'سيتم دعم عرض PDF قريباً', type: SnackType.info),
                     child: Container(
                       height: 48,
                       decoration: BoxDecoration(

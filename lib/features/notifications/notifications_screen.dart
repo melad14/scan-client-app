@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/ui_components.dart';
+import 'package:patient_app/core/utils/app_snackbar.dart';
 import 'package:dio/dio.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -108,12 +109,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       await _api.dio.put('/notifications/read-all');
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم تحديد جميع الإشعارات كمقروءة', style: TextStyle(fontFamily: 'Cairo')),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        AppSnackBar.show(context, message: 'تم تحديد جميع الإشعارات كمقروءة', type: SnackType.success);
       }
     } catch (e) {
       debugPrint('Failed to mark all as read: $e');

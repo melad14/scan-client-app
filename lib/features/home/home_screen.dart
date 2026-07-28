@@ -5,9 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/order.dart';
 import 'package:patient_app/core/models/category.dart';
+import 'package:patient_app/core/models/saved_patient.dart';
 import 'package:patient_app/core/services/storage_service.dart';
 import 'package:patient_app/core/services/notification_service.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/utils/app_snackbar.dart';
+import 'package:patient_app/core/utils/loading_overlay.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/theme_provider.dart';
 import 'package:patient_app/core/theme/ui_components.dart';
@@ -29,9 +32,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   // Orders state
   List<MedicalOrder> _orders = [];
   bool _isLoadingOrders = false;
+  bool _isLoggingOut = false;
   String? _ordersError;
   String _statusFilter = 'all';
   final TextEditingController _searchController = TextEditingController();
+
+  // Saved Patients state
+  List<SavedPatient> _savedPatients = [];
+  String? _selectedPatientName;
+  bool _isLoadingPatients = false;
 
   // Categories state
   List<ServiceCategory> _categories = [];
@@ -68,6 +77,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     _loadUserInfo();
     _fetchCategories();
     _fetchOrders();
+    _fetchSavedPatients();
     _fetchUnreadCount();
     
     // Register FCM Device Token for notifications
@@ -201,7 +211,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
 
     setState(() { _isLoadingOrders = true; _ordersError = null; });
     try {
-      final endpoint = '${Constants.ordersHistory}?status=$_statusFilter&search=${_searchController.text}';
+      var endpoint = '${Constants.ordersHistory}?status=$_statusFilter&search=${_searchController.text}';
+      if (_selectedPatientName != null) {
+        endpoint += '&patientName=${Uri.encodeComponent(_selectedPatientName!)}';
+      }
       final res = await _api.dio.get(endpoint);
       if (res.statusCode == 200) {
         final List list = res.data['data'] ?? [];
@@ -217,9 +230,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       if (mounted) {
         if (e.type == DioExceptionType.connectionError || e.type == DioExceptionType.connectionTimeout) {
           if (_orders.isNotEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('أنت غير متصل بالإنترنت. يتم عرض البيانات المحفوظة محلياً.')),
-            );
+            AppSnackBar.show(context, message: 'أنت غير متصل بالإنترنت. يتم عرض البيانات المحفوظة محلياً.', type: SnackType.warning);
           } else {
             setState(() => _ordersError = 'تعذر الاتصال. تحقق من الإنترنت.');
           }
@@ -282,9 +293,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
       ),
     );
     if (confirmed == true) {
+      setState(() => _isLoggingOut = true);
       try { await _api.dio.post(Constants.logout); } catch (_) {}
       await StorageService.clearAll();
       if (mounted) context.go('/login');
+    }
+  }
+
+  Future<void> _fetchSavedPatients() async {
+    setState(() => _isLoadingPatients = true);
+    try {
+      final res = await _api.dio.get(Constants.savedPatients);
+      if (res.statusCode == 200 && mounted) {
+        final List list = res.data['data'] ?? [];
+        setState(() {
+          _savedPatients = list.map((e) => SavedPatient.fromJson(e)).toList();
+        });
+      }
+    } catch (_) {} finally {
+      if (mounted) setState(() => _isLoadingPatients = false);
     }
   }
 
@@ -296,8 +323,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
         statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
         statusBarColor: Colors.transparent,
       ),
-      child: Scaffold(
-        backgroundColor: context.colors.background,
+      child: LoadingOverlay(
+        isVisible: _isLoggingOut,
+        message: 'جاري تسجيل الخروج...',
+        child: Scaffold(
+          backgroundColor: context.colors.background,
         bottomNavigationBar: _buildBottomNav(),
         body: FadeTransition(
           opacity: _tabFade,
@@ -308,8 +338,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                   : const ProfileScreen(),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildBottomNav() {
     final c = context.colors;
@@ -697,6 +728,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
           child: Column(
             children: [
               Text('السجل المرضي', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textPrimary)),
+              if (_savedPatients.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                _buildPatientFilterCards(),
+              ],
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -766,6 +801,116 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
         ),
       ],
     );
+  }
+
+  Widget _buildPatientFilterCards() {
+    final c = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('تصفية حسب المرضى المحفوظين:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c.textSecondary, fontFamily: 'Cairo')),
+              if (_selectedPatientName != null)
+                GestureDetector(
+                  onTap: () {
+                    setState(() => _selectedPatientName = null);
+                    _fetchOrders();
+                  },
+                  child: Text('عرض الكل', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: c.primary, fontFamily: 'Cairo')),
+                ),
+            ],
+          ),
+        ),
+        SizedBox(
+          height: 72,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: _savedPatients.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (_, i) {
+              final p = _savedPatients[i];
+              final isSelected = _selectedPatientName == p.name;
+              return GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _selectedPatientName = isSelected ? null : p.name;
+                  });
+                  _fetchOrders();
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: isSelected ? c.primary : c.surfaceVariant,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected ? c.primary : c.border,
+                      width: isSelected ? 2 : 1,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: isSelected ? Colors.white.withOpacity(0.2) : c.primaryLight,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _getRelationshipIcon(p.relationship),
+                          color: isSelected ? Colors.white : c.primary,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.label.isNotEmpty ? p.label : p.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: isSelected ? Colors.white : c.textPrimary,
+                              fontFamily: 'Cairo',
+                            ),
+                          ),
+                          Text(
+                            p.name,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: isSelected ? Colors.white.withOpacity(0.8) : c.textMuted,
+                              fontFamily: 'Cairo',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _getRelationshipIcon(String relationship) {
+    switch (relationship) {
+      case 'self': return Icons.person_rounded;
+      case 'spouse': return Icons.favorite_rounded;
+      case 'parent': return Icons.elderly_rounded;
+      case 'child': return Icons.child_care_rounded;
+      case 'sibling': return Icons.people_rounded;
+      default: return Icons.person_outline_rounded;
+    }
   }
 
   Widget _buildSkeletonList() {

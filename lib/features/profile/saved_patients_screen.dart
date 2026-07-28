@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/saved_patient.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/utils/app_snackbar.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/ui_components.dart';
 import 'package:dio/dio.dart';
@@ -299,9 +300,7 @@ class _SavedPatientsScreenState extends State<SavedPatientsScreen> {
                             phoneController.text.trim().isEmpty ||
                             ageController.text.trim().isEmpty ||
                             label.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('يرجى ملء كافة الحقول الإلزامية')),
-                          );
+                          AppSnackBar.show(context, message: 'يرجى ملء كافة الحقول الإلزامية', type: SnackType.warning);
                           return;
                         }
 
@@ -335,9 +334,9 @@ class _SavedPatientsScreenState extends State<SavedPatientsScreen> {
                             _fetchPatients();
                           }
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('فشل حفظ البيانات الطبية. يرجى التحقق من المدخلات.')),
-                          );
+                          if (context.mounted) {
+                            AppSnackBar.show(context, message: 'فشل حفظ البيانات الطبية. يرجى التحقق من المدخلات.', type: SnackType.error);
+                          }
                           setState(() => _isLoading = false);
                         }
                       },
@@ -387,9 +386,9 @@ class _SavedPatientsScreenState extends State<SavedPatientsScreen> {
           _fetchPatients();
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل حذف المريض من الملفات المحفوظة')),
-        );
+        if (mounted) {
+          AppSnackBar.show(context, message: 'فشل حذف المريض من الملفات المحفوظة', type: SnackType.error);
+        }
         setState(() => _isLoading = false);
       }
     }
@@ -403,9 +402,9 @@ class _SavedPatientsScreenState extends State<SavedPatientsScreen> {
         _fetchPatients();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('فشل تعيين المريض كافتراضي')),
-      );
+      if (mounted) {
+        AppSnackBar.show(context, message: 'فشل تعيين المريض كافتراضي', type: SnackType.error);
+      }
       setState(() => _isLoading = false);
     }
   }

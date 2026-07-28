@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/services/storage_service.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/utils/loading_overlay.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/theme_provider.dart';
 import 'package:dio/dio.dart';
@@ -19,6 +20,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   final _api = ApiClient();
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
+  bool _isLoggingOut = false;
   String? _error;
 
   @override
@@ -95,6 +97,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
     );
     if (confirmed == true) {
+      setState(() => _isLoggingOut = true);
       try { await _api.dio.post(Constants.logout); } catch (_) {}
       await StorageService.clearAll();
       if (mounted) context.go('/login');
@@ -116,27 +119,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           context.go('/');
         }
       },
-      child: Scaffold(
-        backgroundColor: c.background,
-        body: RefreshIndicator(
-          color: c.primary,
-          backgroundColor: c.surface,
-          onRefresh: _fetchProfile,
-          child: CustomScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            slivers: [
-              // ── Header ──────────────────────────────────────────────
-              SliverToBoxAdapter(child: _buildHeader(c, isDark)),
+      child: LoadingOverlay(
+        isVisible: _isLoggingOut,
+        message: 'جاري تسجيل الخروج...',
+        child: Scaffold(
+          backgroundColor: c.background,
+          body: RefreshIndicator(
+            color: c.primary,
+            backgroundColor: c.surface,
+            onRefresh: _fetchProfile,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                // ── Header ──────────────────────────────────────────────
+                SliverToBoxAdapter(child: _buildHeader(c, isDark)),
 
-              // ── Content ─────────────────────────────────────────────
-              SliverToBoxAdapter(
-                child: _isLoading
-                    ? _buildLoadingState(c)
-                    : _error != null
-                        ? _buildErrorState(c)
-                        : _buildProfileContent(c, isDark),
-              ),
-            ],
+                // ── Content ─────────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: _isLoading
+                      ? _buildLoadingState(c)
+                      : _error != null
+                          ? _buildErrorState(c)
+                          : _buildProfileContent(c, isDark),
+                ),
+              ],
+            ),
           ),
         ),
       ),

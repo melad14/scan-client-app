@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:patient_app/core/api/api_client.dart';
 import 'package:patient_app/core/models/saved_address.dart';
 import 'package:patient_app/core/utils/constants.dart';
+import 'package:patient_app/core/utils/app_snackbar.dart';
 import 'package:patient_app/core/theme/app_colors.dart';
 import 'package:patient_app/core/theme/ui_components.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -370,9 +371,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                         if (labelController.text.trim().isEmpty ||
                             districtController.text.trim().isEmpty ||
                             streetController.text.trim().isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('يرجى تعبئة الحقول الأساسية')),
-                          );
+                          AppSnackBar.show(context, message: 'يرجى تعبئة الحقول الأساسية', type: SnackType.warning);
                           return;
                         }
 
@@ -410,9 +409,9 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                             _fetchAddresses();
                           }
                         } catch (e) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('فشل حفظ العنوان. يرجى مراجعة الاتصال والبيانات.')),
-                          );
+                          if (context.mounted) {
+                            AppSnackBar.show(context, message: 'فشل حفظ العنوان. يرجى مراجعة الاتصال والبيانات.', type: SnackType.error);
+                          }
                           setState(() => _isLoading = false);
                         }
                       },
@@ -462,9 +461,9 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
           _fetchAddresses();
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('فشل حذف العنوان')),
-        );
+        if (mounted) {
+          AppSnackBar.show(context, message: 'فشل حذف العنوان', type: SnackType.error);
+        }
         setState(() => _isLoading = false);
       }
     }
@@ -478,9 +477,9 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
         _fetchAddresses();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('فشل تعيين العنوان كافتراضي')),
-      );
+      if (mounted) {
+        AppSnackBar.show(context, message: 'فشل تعيين العنوان كافتراضي', type: SnackType.error);
+      }
       setState(() => _isLoading = false);
     }
   }
