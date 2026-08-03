@@ -19,6 +19,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   bool _isLoading = true;
   String? _error;
   final Set<String> _loadingNotificationIds = {};
+  bool _isNavigating = false;
 
   @override
   void initState() {
@@ -61,7 +62,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _markAsRead(String id, String? orderId) async {
-    if (_loadingNotificationIds.contains(id)) return;
+    if (_isNavigating || _loadingNotificationIds.contains(id)) return;
     setState(() {
       _loadingNotificationIds.add(id);
     });
@@ -89,9 +90,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
 
     if (mounted && orderId != null && orderId.isNotEmpty) {
+      _isNavigating = true;
       final currentRoute = GoRouterState.of(context).matchedLocation;
       if (currentRoute != '/orders/$orderId') {
-        context.push('/orders/$orderId');
+        context.push('/orders/$orderId').then((_) {
+          if (mounted) _isNavigating = false;
+        });
+      } else {
+        _isNavigating = false;
       }
     }
   }
@@ -150,6 +156,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.description_rounded;
       case 'order_cancelled':
         return Icons.cancel_rounded;
+      case 'arrival_time_set':
+        return Icons.schedule_rounded;
       default:
         return Icons.notifications_rounded;
     }
@@ -169,6 +177,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return c.success;
       case 'order_cancelled':
         return c.error;
+      case 'arrival_time_set':
+        return c.info;
       default:
         return c.primary;
     }
@@ -188,6 +198,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return c.successBg;
       case 'order_cancelled':
         return c.errorBg;
+      case 'arrival_time_set':
+        return c.infoBg;
       default:
         return c.primaryLight;
     }

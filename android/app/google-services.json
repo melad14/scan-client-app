@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:714160076099:android:e6aeb90a3132eaceaaebf6",
         "android_client_info": {
-          "package_name": "com.example.patient_app"
+          "package_name": "com.scango.patient"
         }
       },
       "oauth_client": [],
