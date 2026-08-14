@@ -11,8 +11,8 @@ import '../features/profile/saved_patients_screen.dart';
 import '../features/profile/saved_addresses_screen.dart';
 import '../features/profile/complaints_list_screen.dart';
 import '../features/notifications/notifications_screen.dart';
-import 'package:patient_app/core/services/storage_service.dart';
-import 'package:patient_app/core/services/notification_service.dart';
+import 'package:dr_ray/core/services/storage_service.dart';
+import 'package:dr_ray/core/services/notification_service.dart';
 
 final GoRouter appRouter = GoRouter(
   // Wire the global navigator key so NotificationService can navigate

@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:patient_app/core/api/api_client.dart';
-import 'package:patient_app/core/models/service.dart';
-import 'package:patient_app/core/models/saved_patient.dart';
-import 'package:patient_app/core/models/saved_address.dart';
-import 'package:patient_app/core/models/category.dart';
-import 'package:patient_app/core/utils/constants.dart';
-import 'package:patient_app/core/utils/app_snackbar.dart';
+import 'package:dr_ray/core/api/api_client.dart';
+import 'package:dr_ray/core/models/service.dart';
+import 'package:dr_ray/core/models/saved_patient.dart';
+import 'package:dr_ray/core/models/saved_address.dart';
+import 'package:dr_ray/core/models/category.dart';
+import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/utils/app_snackbar.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:dio/dio.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http_parser/http_parser.dart';
 

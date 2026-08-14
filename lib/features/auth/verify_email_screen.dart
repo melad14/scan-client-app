@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import 'package:patient_app/core/utils/constants.dart';
-import 'package:patient_app/core/services/storage_service.dart';
-import 'package:patient_app/core/services/notification_service.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/services/storage_service.dart';
+import 'package:dr_ray/core/services/notification_service.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   final String userId;

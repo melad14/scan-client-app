@@ -1,0 +1,5 @@
+package com.drray.patient
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()

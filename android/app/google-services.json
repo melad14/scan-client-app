@@ -9,6 +9,25 @@
       "client_info": {
         "mobilesdk_app_id": "1:714160076099:android:e6aeb90a3132eaceaaebf6",
         "android_client_info": {
+          "package_name": "com.drray.patient"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBZBiQiWZhOxuMViuZOTHgb63G69ML1L6s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:714160076099:android:e6aeb90a3132eaceaaebf6",
+        "android_client_info": {
           "package_name": "com.scango.patient"
         }
       },

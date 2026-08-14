@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:patient_app/core/api/api_client.dart';
-import 'package:patient_app/core/models/order.dart';
-import 'package:patient_app/core/models/category.dart';
-import 'package:patient_app/core/models/saved_patient.dart';
-import 'package:patient_app/core/services/storage_service.dart';
-import 'package:patient_app/core/services/notification_service.dart';
-import 'package:patient_app/core/utils/constants.dart';
-import 'package:patient_app/core/utils/app_snackbar.dart';
-import 'package:patient_app/core/utils/loading_overlay.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
-import 'package:patient_app/core/theme/theme_provider.dart';
-import 'package:patient_app/core/theme/ui_components.dart';
-import 'package:patient_app/features/profile/profile_screen.dart';
+import 'package:dr_ray/core/api/api_client.dart';
+import 'package:dr_ray/core/models/order.dart';
+import 'package:dr_ray/core/models/category.dart';
+import 'package:dr_ray/core/models/saved_patient.dart';
+import 'package:dr_ray/core/services/storage_service.dart';
+import 'package:dr_ray/core/services/notification_service.dart';
+import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/utils/app_snackbar.dart';
+import 'package:dr_ray/core/utils/loading_overlay.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
+import 'package:dr_ray/core/theme/theme_provider.dart';
+import 'package:dr_ray/core/theme/ui_components.dart';
+import 'package:dr_ray/features/profile/profile_screen.dart';
 import 'package:dio/dio.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -83,6 +83,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     // Register FCM Device Token for notifications
     NotificationService.registerDeviceToken();
     _checkCompletedOrder();
+
+    // Listen to foreground notifications for real-time refresh
+    NotificationService.onNotificationReceived.addListener(_handleNotificationReceived);
+  }
+
+  void _handleNotificationReceived() {
+    if (mounted) {
+      debugPrint('[PatientHomeScreen] Real-time notification received. Refreshing unread count and orders...');
+      _fetchUnreadCount();
+      _fetchOrders();
+    }
   }
 
   @override
@@ -186,6 +197,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
 
   @override
   void dispose() {
+    NotificationService.onNotificationReceived.removeListener(_handleNotificationReceived);
     _tabAnimController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -344,28 +356,76 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
 
   Widget _buildBottomNav() {
     final c = context.colors;
-    return Container(
-      decoration: BoxDecoration(
-        color: c.surface,
-        border: Border(top: BorderSide(color: c.border, width: 1)),
-        boxShadow: context.isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, -2))],
+    final isDark = context.isDark;
+    return SafeArea(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+        height: 66,
+        decoration: BoxDecoration(
+          color: c.surface.withOpacity(0.92),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: c.border, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            _buildNavItem(0, Icons.home_rounded, 'الرئيسية'),
+            _buildNavItem(1, Icons.receipt_long_rounded, 'سجلاتي'),
+            _buildNavItem(2, Icons.person_rounded, 'حسابي'),
+          ],
+        ),
       ),
-      child: BottomNavigationBar(
-        currentIndex: _currentTab,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        selectedItemColor: c.primary,
-        unselectedItemColor: c.textMuted,
-        onTap: (i) {
-          setState(() => _currentTab = i);
+    );
+  }
+
+  Widget _buildNavItem(int index, IconData icon, String label) {
+    final c = context.colors;
+    final isSelected = _currentTab == index;
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() => _currentTab = index);
           _tabAnimController.forward(from: 0);
-          if (i == 1) _fetchOrders();
+          if (index == 1) _fetchOrders();
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'الرئيسية'),
-          BottomNavigationBarItem(icon: Icon(Icons.receipt_long_rounded), label: 'السجل المرضي'),
-          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'حسابي'),
-        ],
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOut,
+          margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? c.primaryLight : Colors.transparent,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                color: isSelected ? c.primary : c.textMuted,
+                size: isSelected ? 22 : 20,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                style: TextStyle(
+                  fontFamily: 'Cairo',
+                  fontSize: 11,
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  color: isSelected ? c.primary : c.textMuted,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -574,15 +634,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
   Widget _buildHeroHeader() {
     final c = context.colors;
     final isDark = context.isDark;
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 28),
+    return ClipPath(
+      clipper: _WaveClipper(),
+      child: Container(
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 56),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: isDark
-              ? [const Color(0xFF0A0F1E), const Color(0xFF0F1729)]
-              : [const Color(0xFF085041), const Color(0xFF1D9E75)],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
+              ? [const Color(0xFF070D1F), const Color(0xFF0D1B38), const Color(0xFF0A1A2E)]
+              : [const Color(0xFF063828), const Color(0xFF085041), const Color(0xFF1D9E75)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
       ),
       child: Column(
@@ -604,7 +666,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                     child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 20),
                   ),
                   const SizedBox(width: 10),
-                  const Text('سكان جو',
+                  const Text('Dr Ray',
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: -0.3)),
                 ],
               ),
@@ -707,7 +769,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
           const SizedBox(height: 4),
         ],
       ),
-    );
+    ));
   }
 
   // ════════════════════════════════════════════════════════
@@ -1057,7 +1119,7 @@ class _SkeletonCardState extends State<_SkeletonCard> with SingleTickerProviderS
 }
 
 // ══════════════════════════════════════════════════════════
-//  Service Card — clean, no gradient, icon on teal circle
+//  Service Card — Premium gradient with icon glow
 // ══════════════════════════════════════════════════════════
 class _ServiceCard extends StatefulWidget {
   final String title, subtitle;
@@ -1073,46 +1135,287 @@ class _ServiceCard extends StatefulWidget {
 
 class _ServiceCardState extends State<_ServiceCard> {
   bool _pressed = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
     final isDark = context.isDark;
+    final color = widget.iconColor;
     return GestureDetector(
       onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() { _pressed = false; _hovered = false; }),
+      onTapCancel: () => setState(() { _pressed = false; _hovered = false; }),
+      child: AnimatedScale(
+        scale: _pressed ? 0.93 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            color: c.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: _pressed ? color.withOpacity(0.5) : c.border,
+              width: _pressed ? 1.5 : 1,
+            ),
+            boxShadow: isDark
+                ? [
+                    BoxShadow(
+                      color: color.withOpacity(_pressed ? 0.2 : 0.06),
+                      blurRadius: _pressed ? 20 : 8,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
+                : [
+                    ...c.cardShadow,
+                    if (_pressed)
+                      BoxShadow(
+                        color: color.withOpacity(0.15),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                  ],
+          ),
+          child: Stack(
+            children: [
+              // Subtle top-right glow
+              if (!isDark)
+                Positioned(
+                  top: -10,
+                  right: -10,
+                  child: Container(
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: RadialGradient(
+                        colors: [
+                          color.withOpacity(0.12),
+                          color.withOpacity(0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Icon container with layered look
+                    Container(
+                      width: 54, height: 54,
+                      decoration: BoxDecoration(
+                        color: isDark ? color.withOpacity(0.15) : widget.iconBg,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: color.withOpacity(isDark ? 0.25 : 0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Icon(widget.icon, color: color, size: 27),
+                    ),
+                    const Spacer(),
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: c.textPrimary,
+                        height: 1.3,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Container(
+                          width: 5, height: 5,
+                          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            widget.subtitle,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: color,
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  Order Card — Premium with colored status bar
+// ══════════════════════════════════════════════════════════
+class _OrderCard extends StatefulWidget {
+  final MedicalOrder order;
+  const _OrderCard({required this.order});
+  @override State<_OrderCard> createState() => _OrderCardState();
+}
+
+class _OrderCardState extends State<_OrderCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final isDark = context.isDark;
+    final statusColor = AppColors.getStatusColor(widget.order.status);
+    final statusBg    = AppColors.getStatusBgColor(widget.order.status, dark: isDark);
+    final statusLabel = AppColors.getStatusLabel(widget.order.status);
+
+    return GestureDetector(
+      onTap: () => context.push('/orders/${widget.order.id}'),
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
       child: AnimatedScale(
-        scale: _pressed ? 0.95 : 1.0,
+        scale: _pressed ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 120),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
+          margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: c.surface,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: _pressed ? c.primary.withOpacity(0.4) : c.border),
-            boxShadow: isDark ? [] : c.cardShadow,
+            border: Border.all(color: _pressed ? statusColor.withOpacity(0.3) : c.border),
+            boxShadow: isDark ? [] : [
+              ...c.cardShadow,
+              if (_pressed)
+                BoxShadow(color: statusColor.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, 4)),
+            ],
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Row(
               children: [
+                // ── Colored left status bar ─────────────────
                 Container(
-                  width: 52, height: 52,
-                  decoration: BoxDecoration(
-                    color: isDark ? widget.iconColor.withOpacity(0.15) : widget.iconBg,
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Icon(widget.icon, color: widget.iconColor, size: 26),
+                  width: 5,
+                  height: 100,
+                  color: statusColor,
                 ),
-                const Spacer(),
-                Text(widget.title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: c.textPrimary)),
-                const SizedBox(height: 2),
-                Text(widget.subtitle,
-                    style: TextStyle(fontSize: 11, color: widget.iconColor, fontFamily: 'Inter', fontWeight: FontWeight.w600)),
+                // ── Content ─────────────────────────────────
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 16, 16, 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.receipt_long_rounded, size: 14, color: c.primary),
+                                const SizedBox(width: 5),
+                                Text(
+                                  widget.order.orderNumber,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: c.primary,
+                                    fontSize: 13,
+                                    fontFamily: 'Inter',
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: statusBg,
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Container(
+                                    width: 6, height: 6,
+                                    decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle),
+                                  ),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    statusLabel,
+                                    style: TextStyle(
+                                      color: statusColor,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      fontFamily: 'Cairo',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          widget.order.services.map((s) => s.nameAr).join(' • '),
+                          style: TextStyle(color: c.textSecondary, fontSize: 13, height: 1.4),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(children: [
+                              Icon(Icons.access_time_rounded, size: 13, color: c.textMuted),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${widget.order.createdAt.day}/${widget.order.createdAt.month}/${widget.order.createdAt.year}',
+                                style: TextStyle(fontSize: 12, color: c.textMuted, fontFamily: 'Inter'),
+                              ),
+                            ]),
+                            Row(children: [
+                              Text(
+                                '${widget.order.pricing?['total'] ?? 0}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: c.accent,
+                                  fontSize: 16,
+                                  fontFamily: 'Inter',
+                                ),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                'ج.م',
+                                style: TextStyle(fontSize: 11, color: c.accent.withOpacity(0.8), fontFamily: 'Cairo'),
+                              ),
+                            ]),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                // ── Chevron ─────────────────────────────────
+                Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Icon(Icons.chevron_left_rounded, color: c.textMuted, size: 20),
+                ),
               ],
             ),
           ),
@@ -1123,78 +1426,26 @@ class _ServiceCardState extends State<_ServiceCard> {
 }
 
 // ══════════════════════════════════════════════════════════
-//  Order Card
+//  Wave Clipper for Hero Header
 // ══════════════════════════════════════════════════════════
-class _OrderCard extends StatelessWidget {
-  final MedicalOrder order;
-  const _OrderCard({required this.order});
+class _WaveClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.lineTo(0, size.height - 32);
+    path.quadraticBezierTo(
+      size.width * 0.25, size.height,
+      size.width * 0.5, size.height - 18,
+    );
+    path.quadraticBezierTo(
+      size.width * 0.75, size.height - 36,
+      size.width, size.height - 10,
+    );
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
 
   @override
-  Widget build(BuildContext context) {
-    final c = context.colors;
-    final isDark = context.isDark;
-    final statusColor = AppColors.getStatusColor(order.status);
-    final statusBg    = AppColors.getStatusBgColor(order.status, dark: isDark);
-    final statusLabel = AppColors.getStatusLabel(order.status);
-
-    return GestureDetector(
-      onTap: () => context.push('/orders/${order.id}'),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: c.border),
-          boxShadow: isDark ? [] : c.cardShadow,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(order.orderNumber,
-                    style: TextStyle(fontWeight: FontWeight.w700, color: c.primary, fontSize: 14, fontFamily: 'Inter')),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(color: statusBg, borderRadius: BorderRadius.circular(20)),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(width: 6, height: 6, decoration: BoxDecoration(color: statusColor, shape: BoxShape.circle)),
-                      const SizedBox(width: 5),
-                      Text(statusLabel, style: TextStyle(color: statusColor, fontSize: 11, fontWeight: FontWeight.w700)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              order.services.map((s) => s.nameAr).join(' + '),
-              style: TextStyle(color: c.textSecondary, fontSize: 13),
-              maxLines: 2, overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 14),
-            Container(height: 1, color: c.borderLight),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(children: [
-                  Icon(Icons.calendar_today_rounded, size: 13, color: c.textMuted),
-                  const SizedBox(width: 4),
-                  Text('${order.createdAt.day}/${order.createdAt.month}/${order.createdAt.year}',
-                      style: TextStyle(fontSize: 12, color: c.textMuted, fontFamily: 'Inter')),
-                ]),
-                Text('${order.pricing?['total'] ?? 0} ج.م',
-                    style: TextStyle(fontWeight: FontWeight.w700, color: c.accent, fontSize: 15, fontFamily: 'Inter')),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  bool shouldReclip(_WaveClipper oldClipper) => false;
 }

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import 'package:patient_app/core/utils/constants.dart';
-import 'package:patient_app/core/services/storage_service.dart';
-import 'package:patient_app/core/services/notification_service.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
+import 'dart:ui';
+import 'dart:math' as math;
+import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/services/storage_service.dart';
+import 'package:dr_ray/core/services/notification_service.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,17 +16,25 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final FocusNode _usernameFocus = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
 
   bool _isLoading = false;
   bool _passwordVisible = false;
   String? _errorMessage;
 
-  late AnimationController _animController;
+  late AnimationController _entryController;
+  late AnimationController _bgController;
+  late AnimationController _pulseController;
+
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
+  late Animation<double> _logoScaleAnim;
+  late Animation<double> _bgAnim;
 
   final _dio = Dio(BaseOptions(
     baseUrl: Constants.apiBaseUrl,
@@ -34,18 +45,31 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-    _animController.forward();
+
+    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 8))..repeat();
+    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat(reverse: true);
+    _entryController = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100));
+    _bgAnim = CurvedAnimation(parent: _bgController, curve: Curves.linear);
+    _fadeAnim = CurvedAnimation(parent: _entryController, curve: const Interval(0.2, 1.0, curve: Curves.easeOut));
+    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero)
+        .animate(CurvedAnimation(parent: _entryController, curve: const Interval(0.1, 1.0, curve: Curves.easeOutCubic)));
+    _logoScaleAnim = Tween<double>(begin: 0.7, end: 1.0)
+        .animate(CurvedAnimation(parent: _entryController, curve: const Interval(0.0, 0.6, curve: Curves.elasticOut)));
+    _entryController.forward();
+
+    _usernameFocus.addListener(() => setState(() {}));
+    _passwordFocus.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
-    _animController.dispose();
+    _entryController.dispose();
+    _bgController.dispose();
+    _pulseController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
+    _usernameFocus.dispose();
+    _passwordFocus.dispose();
     super.dispose();
   }
 
@@ -71,10 +95,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         await StorageService.saveRefreshToken(res.data['data']['refreshToken']);
         await StorageService.saveUserRole('patient');
         await StorageService.saveUserData(res.data['data']['user']);
-        
-        // Register Push Notification Token
         await NotificationService.registerDeviceToken();
-
         if (mounted) context.go('/');
       }
     } on DioException catch (e) {
@@ -117,212 +138,457 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    final isDark = context.isDark;
+    final size = MediaQuery.of(context).size;
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: SlideTransition(
-            position: _slideAnim,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 56),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.light,
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFF061A13),
+        body: Stack(
+          children: [
+            // ── Animated Background ─────────────────────────────
+            _AnimatedBackground(controller: _bgAnim, pulseController: _pulseController, size: size),
 
-                  // ─── Hero Section ──────────────────────────────
-                  Center(
-                    child: Column(
-                      children: [
-                        // Logo Icon
-                        Container(
-                          width: 80, height: 80,
-                          decoration: BoxDecoration(
-                            color: c.primary,
-                            borderRadius: BorderRadius.circular(24),
-                            boxShadow: c.primaryGlow,
-                          ),
-                          child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 40),
-                        ),
-                        const SizedBox(height: 24),
+            // ── Main Content ────────────────────────────────────
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
+                child: SlideTransition(
+                  position: _slideAnim,
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(height: size.height * 0.07),
 
-                        // Brand Name
-                        Text(
-                          'سكان جو',
-                          style: TextStyle(
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800,
-                            color: c.textPrimary,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-
-                        // Tagline
-                        Text(
-                          'خدماتك الطبية من باب بيتك',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: c.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 44),
-
-                  // ─── Form Card ────────────────────────────────
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: c.surface,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: c.border),
-                      boxShadow: isDark ? [] : c.cardShadow,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'تسجيل الدخول',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: c.textPrimary),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
-
-                        // ─── Error ────────────────────────────
-                        if (_errorMessage != null) ...[
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: c.errorBg,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: c.error.withOpacity(0.3)),
-                            ),
-                            child: Row(
+                          // ── Logo & Brand ──────────────────────
+                          ScaleTransition(
+                            scale: _logoScaleAnim,
+                            child: Column(
                               children: [
-                                Icon(Icons.error_outline_rounded, color: c.error, size: 20),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(_errorMessage!,
-                                      style: TextStyle(color: c.error, fontSize: 13, height: 1.4)),
+                                // Glowing Logo
+                                Container(
+                                  width: 90, height: 90,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    gradient: const LinearGradient(
+                                      colors: [Color(0xFF2DDBA4), Color(0xFF1D9E75)],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(color: const Color(0xFF1D9E75).withOpacity(0.5), blurRadius: 30, spreadRadius: 4),
+                                      BoxShadow(color: const Color(0xFF1D9E75).withOpacity(0.2), blurRadius: 60, spreadRadius: 10),
+                                    ],
+                                  ),
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      'assets/icon/app_icon.png',
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.medical_services_rounded,
+                                        color: Colors.white, size: 44,
+                                      ),
+                                    ),
+                                  ),
                                 ),
-                                GestureDetector(
-                                  onTap: () => setState(() => _errorMessage = null),
-                                  child: Icon(Icons.close_rounded, color: c.error, size: 18),
+                                const SizedBox(height: 20),
+                                // Brand Name
+                                const Text(
+                                  'Dr Ray',
+                                  style: TextStyle(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.white,
+                                    letterSpacing: -0.5,
+                                    shadows: [Shadow(color: Color(0xFF1D9E75), blurRadius: 20)],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'خدماتك الطبية من باب بيتك',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.2,
+                                  ),
                                 ),
                               ],
                             ),
                           ),
-                          const SizedBox(height: 20),
-                        ],
 
-                        // ─── Username ─────────────────────────
-                        _FieldLabel(label: 'اسم المستخدم', colors: c),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _usernameController,
-                          textDirection: TextDirection.ltr,
-                          textAlign: TextAlign.right,
-                          autocorrect: false,
-                          textCapitalization: TextCapitalization.none,
-                          style: TextStyle(color: c.textPrimary),
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.alternate_email_rounded),
-                            hintText: 'اسم المستخدم أو البريد الإلكتروني',
-                          ),
-                        ),
-                        const SizedBox(height: 20),
+                          SizedBox(height: size.height * 0.06),
 
-                        // ─── Password ─────────────────────────
-                        _FieldLabel(label: 'كلمة المرور', colors: c),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: !_passwordVisible,
-                          textDirection: TextDirection.ltr,
-                          style: TextStyle(color: c.textPrimary),
-                          onSubmitted: (_) => _handleLogin(),
-                          decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.lock_outline_rounded),
-                            hintText: '••••••••',
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                color: c.textMuted, size: 20,
+                          // ── Glass Form Card ───────────────────
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(28),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                              child: Container(
+                                padding: const EdgeInsets.all(28),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(28),
+                                  border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.5),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    // Form Title
+                                    const Text(
+                                      'تسجيل الدخول',
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                        fontFamily: 'Cairo',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      'مرحباً بعودتك 👋',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: Colors.white.withOpacity(0.5),
+                                        fontFamily: 'Cairo',
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 28),
+
+                                    // ── Error Banner ─────────────
+                                    if (_errorMessage != null) ...[
+                                      _GlassErrorBanner(message: _errorMessage!, onClose: () => setState(() => _errorMessage = null)),
+                                      const SizedBox(height: 20),
+                                    ],
+
+                                    // ── Username Field ───────────
+                                    _GlassInputField(
+                                      controller: _usernameController,
+                                      focusNode: _usernameFocus,
+                                      label: 'اسم المستخدم',
+                                      hint: 'اسم المستخدم أو البريد الإلكتروني',
+                                      icon: Icons.alternate_email_rounded,
+                                      textDirection: TextDirection.ltr,
+                                      textAlign: TextAlign.right,
+                                      isFocused: _usernameFocus.hasFocus,
+                                      onSubmitted: (_) => _passwordFocus.requestFocus(),
+                                    ),
+                                    const SizedBox(height: 16),
+
+                                    // ── Password Field ───────────
+                                    _GlassInputField(
+                                      controller: _passwordController,
+                                      focusNode: _passwordFocus,
+                                      label: 'كلمة المرور',
+                                      hint: '••••••••',
+                                      icon: Icons.lock_outline_rounded,
+                                      obscureText: !_passwordVisible,
+                                      isFocused: _passwordFocus.hasFocus,
+                                      onSubmitted: (_) => _handleLogin(),
+                                      suffixWidget: GestureDetector(
+                                        onTap: () => setState(() => _passwordVisible = !_passwordVisible),
+                                        child: Icon(
+                                          _passwordVisible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                                          color: Colors.white.withOpacity(0.5),
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 32),
+
+                                    // ── Login Button ─────────────
+                                    _GlowButton(
+                                      label: 'دخول',
+                                      isLoading: _isLoading,
+                                      onTap: _handleLogin,
+                                    ),
+                                  ],
+                                ),
                               ),
-                              onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 28),
 
-                        // ─── Login Button (solid teal) ─────────
-                        _SolidButton(
-                          label: 'دخول',
-                          isLoading: _isLoading,
-                          primary: c.primary,
-                          onTap: _handleLogin,
-                        ),
-                      ],
+                          const SizedBox(height: 28),
+
+                          // ── Register Link ─────────────────────
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                'ليس لديك حساب؟',
+                                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 14),
+                              ),
+                              TextButton(
+                                onPressed: () => context.push('/register'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF2DDBA4),
+                                ),
+                                child: const Text(
+                                  'إنشاء حساب جديد',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF2DDBA4),
+                                    fontFamily: 'Cairo',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 24),
-
-                  // ─── Register Link ────────────────────────────
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text('ليس لديك حساب؟',
-                          style: TextStyle(color: c.textSecondary, fontSize: 14)),
-                      TextButton(
-                        onPressed: () => context.push('/register'),
-                        child: Text(
-                          'إنشاء حساب جديد',
-                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 }
 
-// ── Field Label ─────────────────────────────────────────────────
-class _FieldLabel extends StatelessWidget {
-  final String label;
-  final AppColorTokens colors;
-  const _FieldLabel({required this.label, required this.colors});
+// ────────────────────────────────────────────────────────────────────
+// Animated Background with floating orbs
+// ────────────────────────────────────────────────────────────────────
+class _AnimatedBackground extends StatelessWidget {
+  final Animation<double> controller;
+  final Animation<double> pulseController;
+  final Size size;
+
+  const _AnimatedBackground({
+    required this.controller,
+    required this.pulseController,
+    required this.size,
+  });
+
   @override
-  Widget build(BuildContext context) => Text(
-    label,
-    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textSecondary),
-  );
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([controller, pulseController]),
+      builder: (_, __) {
+        final t = controller.value;
+        final p = pulseController.value;
+        return Stack(
+          children: [
+            // Deep dark background
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Color(0xFF061A13), Color(0xFF0A2518), Color(0xFF061A13)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+              ),
+            ),
+            // Orb 1 — teal
+            Positioned(
+              top: size.height * 0.08 + math.sin(t * 2 * math.pi) * 20,
+              right: -size.width * 0.15 + math.cos(t * 2 * math.pi) * 10,
+              child: _Orb(
+                size: size.width * 0.7,
+                color: const Color(0xFF1D9E75).withOpacity(0.18 + p * 0.06),
+                blurRadius: 80,
+              ),
+            ),
+            // Orb 2 — emerald
+            Positioned(
+              bottom: size.height * 0.15 + math.cos(t * 2 * math.pi) * 25,
+              left: -size.width * 0.2 + math.sin(t * 2 * math.pi) * 15,
+              child: _Orb(
+                size: size.width * 0.6,
+                color: const Color(0xFF085041).withOpacity(0.22 + p * 0.04),
+                blurRadius: 70,
+              ),
+            ),
+            // Orb 3 — small accent
+            Positioned(
+              top: size.height * 0.4 + math.sin(t * 2 * math.pi + 1) * 30,
+              left: size.width * 0.6 + math.cos(t * 2 * math.pi + 1) * 10,
+              child: _Orb(
+                size: size.width * 0.4,
+                color: const Color(0xFF2DDBA4).withOpacity(0.08 + p * 0.04),
+                blurRadius: 60,
+              ),
+            ),
+            // Subtle grid pattern
+            CustomPaint(
+              size: size,
+              painter: _GridPainter(opacity: 0.04),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }
 
-// ── Solid Teal Button (replaces gradient button everywhere) ──────
-class _SolidButton extends StatefulWidget {
+class _Orb extends StatelessWidget {
+  final double size;
+  final Color color;
+  final double blurRadius;
+
+  const _Orb({required this.size, required this.color, required this.blurRadius});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        boxShadow: [BoxShadow(color: color, blurRadius: blurRadius, spreadRadius: blurRadius * 0.3)],
+      ),
+    );
+  }
+}
+
+class _GridPainter extends CustomPainter {
+  final double opacity;
+  _GridPainter({required this.opacity});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withOpacity(opacity)
+      ..strokeWidth = 0.5;
+
+    const spacing = 40.0;
+    for (double x = 0; x < size.width; x += spacing) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), paint);
+    }
+    for (double y = 0; y < size.height; y += spacing) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GridPainter oldDelegate) => false;
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Glass Input Field
+// ────────────────────────────────────────────────────────────────────
+class _GlassInputField extends StatelessWidget {
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final String label;
+  final String hint;
+  final IconData icon;
+  final bool obscureText;
+  final bool isFocused;
+  final TextDirection? textDirection;
+  final TextAlign textAlign;
+  final Widget? suffixWidget;
+  final ValueChanged<String>? onSubmitted;
+
+  const _GlassInputField({
+    required this.controller,
+    required this.focusNode,
+    required this.label,
+    required this.hint,
+    required this.icon,
+    required this.isFocused,
+    this.obscureText = false,
+    this.textDirection,
+    this.textAlign = TextAlign.start,
+    this.suffixWidget,
+    this.onSubmitted,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.white.withOpacity(0.65),
+            fontFamily: 'Cairo',
+          ),
+        ),
+        const SizedBox(height: 8),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isFocused
+                  ? const Color(0xFF1D9E75).withOpacity(0.8)
+                  : Colors.white.withOpacity(0.12),
+              width: isFocused ? 1.5 : 1,
+            ),
+            boxShadow: isFocused
+                ? [BoxShadow(color: const Color(0xFF1D9E75).withOpacity(0.2), blurRadius: 12, spreadRadius: 0)]
+                : [],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: TextField(
+                controller: controller,
+                focusNode: focusNode,
+                obscureText: obscureText,
+                textDirection: textDirection,
+                textAlign: textAlign,
+                onSubmitted: onSubmitted,
+                autocorrect: false,
+                textCapitalization: TextCapitalization.none,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontFamily: 'Cairo',
+                ),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.06),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  border: InputBorder.none,
+                  hintText: hint,
+                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.3), fontFamily: 'Cairo'),
+                  prefixIcon: Icon(icon, color: isFocused ? const Color(0xFF1D9E75) : Colors.white.withOpacity(0.4), size: 20),
+                  suffixIcon: suffixWidget != null ? Padding(padding: const EdgeInsets.only(right: 12), child: suffixWidget) : null,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Glowing CTA Button
+// ────────────────────────────────────────────────────────────────────
+class _GlowButton extends StatefulWidget {
   final String label;
   final bool isLoading;
-  final Color primary;
   final VoidCallback onTap;
-  const _SolidButton({required this.label, required this.isLoading, required this.primary, required this.onTap});
-  @override State<_SolidButton> createState() => _SolidButtonState();
+
+  const _GlowButton({required this.label, required this.isLoading, required this.onTap});
+
+  @override
+  State<_GlowButton> createState() => _GlowButtonState();
 }
 
-class _SolidButtonState extends State<_SolidButton> {
+class _GlowButtonState extends State<_GlowButton> {
   bool _pressed = false;
 
   @override
@@ -332,28 +598,111 @@ class _SolidButtonState extends State<_SolidButton> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
+      child: AnimatedScale(
+        scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 120),
-        height: 54,
-        decoration: BoxDecoration(
-          color: widget.isLoading
-              ? widget.primary.withOpacity(0.6)
-              : _pressed ? widget.primary.withOpacity(0.85) : widget.primary,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: widget.isLoading ? [] : [
-            BoxShadow(color: widget.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
-          ],
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          height: 58,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: _pressed
+                  ? [const Color(0xFF16755A), const Color(0xFF1D9E75)]
+                  : [const Color(0xFF2DDBA4), const Color(0xFF1D9E75), const Color(0xFF085041)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: widget.isLoading
+                ? []
+                : [
+                    BoxShadow(
+                      color: const Color(0xFF1D9E75).withOpacity(_pressed ? 0.2 : 0.45),
+                      blurRadius: _pressed ? 8 : 20,
+                      spreadRadius: 0,
+                      offset: const Offset(0, 4),
+                    ),
+                    BoxShadow(
+                      color: const Color(0xFF1D9E75).withOpacity(0.15),
+                      blurRadius: 40,
+                      spreadRadius: 4,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+          ),
+          child: Center(
+            child: widget.isLoading
+                ? const SizedBox(
+                    height: 24, width: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'دخول',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          fontFamily: 'Cairo',
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.arrow_back_rounded, color: Colors.white.withOpacity(0.8), size: 20),
+                    ],
+                  ),
+          ),
         ),
-        child: Center(
-          child: widget.isLoading
-              ? const SizedBox(height: 22, width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-              : Text(
-                  widget.label,
+      ),
+    );
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Glass Error Banner
+// ────────────────────────────────────────────────────────────────────
+class _GlassErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onClose;
+
+  const _GlassErrorBanner({required this.message, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(14),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFD44245).withOpacity(0.15),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFD44245).withOpacity(0.4)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Color(0xFFFF6B6E), size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  message,
                   style: const TextStyle(
-                    color: Colors.white, fontSize: 17, fontWeight: FontWeight.w700, fontFamily: 'Cairo',
+                    color: Color(0xFFFF9B9D),
+                    fontSize: 13,
+                    height: 1.4,
+                    fontFamily: 'Cairo',
                   ),
                 ),
+              ),
+              GestureDetector(
+                onTap: onClose,
+                child: const Icon(Icons.close_rounded, color: Color(0xFFFF6B6E), size: 18),
+              ),
+            ],
+          ),
         ),
       ),
     );

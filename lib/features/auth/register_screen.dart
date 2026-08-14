@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
-import 'package:patient_app/core/utils/constants.dart';
-import 'package:patient_app/core/services/storage_service.dart';
-import 'package:patient_app/core/services/notification_service.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/services/storage_service.dart';
+import 'package:dr_ray/core/services/notification_service.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -190,7 +190,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             border: Border.all(color: c.primary.withOpacity(0.2)),
                           ),
                           child: Text(
-                            'أهلاً بك في سكان جو ✨',
+                            'أهلاً بك في Dr Ray ✨',
                             style: TextStyle(color: c.primary, fontSize: 13, fontWeight: FontWeight.w600),
                           ),
                         ),

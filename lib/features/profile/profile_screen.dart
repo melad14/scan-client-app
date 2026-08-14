@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:patient_app/core/api/api_client.dart';
-import 'package:patient_app/core/services/storage_service.dart';
-import 'package:patient_app/core/utils/constants.dart';
-import 'package:patient_app/core/utils/loading_overlay.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
-import 'package:patient_app/core/theme/theme_provider.dart';
+import 'package:dr_ray/core/api/api_client.dart';
+import 'package:dr_ray/core/services/storage_service.dart';
+import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/utils/loading_overlay.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
+import 'package:dr_ray/core/theme/theme_provider.dart';
 import 'package:dio/dio.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {

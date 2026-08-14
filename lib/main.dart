@@ -3,10 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:patient_app/core/services/notification_service.dart';
-import 'package:patient_app/core/services/socket_service.dart';
-import 'package:patient_app/core/theme/app_theme.dart';
-import 'package:patient_app/core/theme/theme_provider.dart';
+import 'package:dr_ray/core/services/notification_service.dart';
+import 'package:dr_ray/core/services/socket_service.dart';
+import 'package:dr_ray/core/theme/app_theme.dart';
+import 'package:dr_ray/core/theme/theme_provider.dart';
 import 'app/router.dart';
 
 void main() async {
@@ -25,13 +25,13 @@ void main() async {
 
   runApp(
     const ProviderScope(
-      child: ScanGoPatientApp(),
+      child: DrRayPatientApp(),
     ),
   );
 }
 
-class ScanGoPatientApp extends ConsumerWidget {
-  const ScanGoPatientApp({super.key});
+class DrRayPatientApp extends ConsumerWidget {
+  const DrRayPatientApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -46,7 +46,7 @@ class ScanGoPatientApp extends ConsumerWidget {
     ));
 
     return MaterialApp.router(
-      title: 'ScanGo | سكان جو',
+      title: 'Dr Ray',
       // Light mode — default, warm cream for patient trust
       theme: AppTheme.lightTheme,
       // Dark mode — deep navy for night comfort

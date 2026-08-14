@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:patient_app/core/theme/app_colors.dart';
+import 'package:dr_ray/core/theme/app_colors.dart';
 
 enum SnackType { success, error, warning, info }
 
