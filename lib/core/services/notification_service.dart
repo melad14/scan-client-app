@@ -104,7 +104,7 @@ class NotificationService {
     final orderId = message.data['orderId'] ?? '';
 
     _localNotifications.show(
-      id: message.messageId.hashCode,
+      id: (message.messageId ?? '').hashCode,
       title: notification.title,
       body: notification.body,
       notificationDetails: NotificationDetails(
