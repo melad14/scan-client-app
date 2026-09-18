@@ -306,7 +306,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
     );
     if (confirmed == true) {
       setState(() => _isLoggingOut = true);
-      try { await _api.dio.post(Constants.logout); } catch (_) {}
+      try {
+        final fcmToken = await NotificationService.currentToken();
+        await _api.dio.post(Constants.logout, data: {'fcmToken': fcmToken});
+      } catch (_) {}
       await StorageService.clearAll();
       if (mounted) context.go('/login');
     }

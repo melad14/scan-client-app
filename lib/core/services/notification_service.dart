@@ -149,6 +149,10 @@ class NotificationService {
   }
 
   // ── Request permission + register FCM token with backend ────────────────────
+  /// True when the user has refused the Android 13+ notification permission.
+  static final ValueNotifier<bool> notificationsBlocked =
+      ValueNotifier<bool>(false);
+
   static Future<void> registerDeviceToken() async {
     if (kIsWeb) return;
     try {
@@ -159,16 +163,32 @@ class NotificationService {
         provisional: false,
       );
 
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        final token = await _messaging.getToken();
-        if (token != null) {
-          await _sendTokenToServer(token);
-        }
-      } else {
+      final denied =
+          settings.authorizationStatus == AuthorizationStatus.denied;
+      notificationsBlocked.value = denied;
+      if (denied) {
         debugPrint('[NotificationService] Permission denied by user');
+      }
+
+      // Always register the token even when permission is denied — in-app
+      // notifications still work, and pushes start as soon as the user
+      // re-enables notifications from Settings.
+      final token = await _messaging.getToken();
+      if (token != null) {
+        await _sendTokenToServer(token);
       }
     } catch (e) {
       debugPrint('[NotificationService] registerDeviceToken error: $e');
+    }
+  }
+
+  /// This device's token — sent with /auth/logout so only this device is forgotten.
+  static Future<String?> currentToken() async {
+    if (kIsWeb) return null;
+    try {
+      return await _messaging.getToken();
+    } catch (_) {
+      return null;
     }
   }
 
