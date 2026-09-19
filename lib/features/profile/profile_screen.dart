@@ -9,6 +9,7 @@ import 'package:dr_ray/core/utils/loading_overlay.dart';
 import 'package:dr_ray/core/theme/app_colors.dart';
 import 'package:dr_ray/core/theme/theme_provider.dart';
 import 'package:dio/dio.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -22,6 +23,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   Map<String, dynamic>? _profile;
   bool _isLoading = true;
   bool _isLoggingOut = false;
+  bool _isDeleting = false;
   String? _error;
 
   @override
@@ -108,6 +110,92 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  // Google Play requires in-app account deletion for any app with sign-up.
+  Future<void> _deleteAccount() async {
+    final c = context.colors;
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('حذف الحساب نهائياً',
+              style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'سيتم حذف اسمك وبريدك ورقم هاتفك والعناوين والأشخاص المحفوظين نهائياً ولا يمكن التراجع.\n\n'
+                'سجلات الطلبات الطبية تُحفظ مجهولة الهوية كما يوجب القانون.\n\n'
+                'اكتب "حذف" للتأكيد:',
+                style: TextStyle(fontFamily: 'Cairo', height: 1.6, fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: controller,
+                onChanged: (_) => setDialogState(() {}),
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700),
+                decoration: InputDecoration(
+                  hintText: 'حذف',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo')),
+            ),
+            TextButton(
+              onPressed: controller.text.trim() == 'حذف' ? () => Navigator.of(ctx).pop(true) : null,
+              child: Text('حذف نهائياً',
+                  style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, color: c.error)),
+            ),
+          ],
+        ),
+      ),
+    );
+    controller.dispose();
+    if (confirmed != true) return;
+
+    setState(() => _isDeleting = true);
+    try {
+      final res = await _api.dio.delete(Constants.profile);
+      if (res.statusCode == 200 && res.data['success'] == true) {
+        await StorageService.clearAll();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('تم حذف حسابك نهائياً', style: TextStyle(fontFamily: 'Cairo')),
+          ));
+          context.go('/login');
+        }
+        return;
+      }
+      throw Exception(res.data['message'] ?? 'فشل حذف الحساب');
+    } on DioException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.response?.data?['message'] ?? 'تعذر حذف الحساب. حاول مرة أخرى.',
+              style: const TextStyle(fontFamily: 'Cairo')),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', ''),
+              style: const TextStyle(fontFamily: 'Cairo')),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -124,8 +212,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         }
       },
       child: LoadingOverlay(
-        isVisible: _isLoggingOut,
-        message: 'جاري تسجيل الخروج...',
+        isVisible: _isLoggingOut || _isDeleting,
+        message: _isDeleting ? 'جاري حذف الحساب...' : 'جاري تسجيل الخروج...',
         child: Scaffold(
           backgroundColor: c.background,
           body: RefreshIndicator(
@@ -417,6 +505,28 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 18),
+
+          // ── Legal & account removal (Google Play requirements) ──
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              GestureDetector(
+                onTap: () => launchUrl(Uri.parse('https://api.drray-eg.com/privacy'), mode: LaunchMode.externalApplication),
+                child: Text('سياسة الخصوصية',
+                    style: TextStyle(fontSize: 12, color: c.textMuted, decoration: TextDecoration.underline, fontFamily: 'Cairo')),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Text('•', style: TextStyle(color: c.textMuted)),
+              ),
+              GestureDetector(
+                onTap: _deleteAccount,
+                child: Text('حذف الحساب نهائياً',
+                    style: TextStyle(fontSize: 12, color: c.error.withOpacity(0.8), decoration: TextDecoration.underline, fontFamily: 'Cairo')),
+              ),
+            ],
           ),
           const SizedBox(height: 32),
         ],
