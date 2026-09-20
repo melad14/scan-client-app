@@ -1,11 +1,11 @@
 {
-    "name": "patient_app",
-    "short_name": "patient_app",
+    "name": "Dr Ray",
+    "short_name": "Dr Ray",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Dr Ray - Home medical services app for patients.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

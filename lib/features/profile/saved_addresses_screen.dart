@@ -113,7 +113,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                     'zoom': '18',
                     'addressdetails': '1',
                   },
-                  options: Options(headers: {'User-Agent': 'ScanGoApp/1.0'}),
+                  options: Options(headers: {'User-Agent': 'DrRayApp/1.0'}),
                 );
                 
                 if (response.statusCode == 200 && response.data != null) {
@@ -228,7 +228,7 @@ class _SavedAddressesScreenState extends State<SavedAddressesScreen> {
                               children: [
                                 TileLayer(
                                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                                  userAgentPackageName: 'com.scango.app',
+                                  userAgentPackageName: 'com.drray.patient',
                                 ),
                                 MarkerLayer(
                                   markers: [
