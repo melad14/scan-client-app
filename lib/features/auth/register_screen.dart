@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dio/dio.dart';
 import 'package:dr_ray/core/utils/constants.dart';
-import 'package:dr_ray/core/services/storage_service.dart';
-import 'package:dr_ray/core/services/notification_service.dart';
-import 'package:dr_ray/core/theme/app_colors.dart';
 import 'package:dr_ray/core/utils/validators.dart';
+import 'package:dr_ray/features/auth/auth_glass_widgets.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -14,14 +13,22 @@ class RegisterScreen extends StatefulWidget {
   State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProviderStateMixin {
-  final TextEditingController _usernameController       = TextEditingController();
-  final TextEditingController _nameController           = TextEditingController();
-  final TextEditingController _emailController          = TextEditingController();
-  final TextEditingController _phoneController          = TextEditingController();
-  final TextEditingController _ageController            = TextEditingController();
-  final TextEditingController _passwordController       = TextEditingController();
+class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStateMixin {
+  final TextEditingController _usernameController        = TextEditingController();
+  final TextEditingController _nameController            = TextEditingController();
+  final TextEditingController _emailController           = TextEditingController();
+  final TextEditingController _phoneController           = TextEditingController();
+  final TextEditingController _ageController             = TextEditingController();
+  final TextEditingController _passwordController        = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
+
+  final FocusNode _usernameFocus = FocusNode();
+  final FocusNode _nameFocus     = FocusNode();
+  final FocusNode _emailFocus    = FocusNode();
+  final FocusNode _phoneFocus    = FocusNode();
+  final FocusNode _ageFocus      = FocusNode();
+  final FocusNode _passwordFocus = FocusNode();
+  final FocusNode _confirmFocus  = FocusNode();
 
   String _selectedGender = 'male';
   bool _isLoading = false;
@@ -31,6 +38,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
+  late AnimationController _bgController;
+  late Animation<double> _bgAnim;
+  late AnimationController _pulseController;
 
   final _dio = Dio(BaseOptions(
     baseUrl: Constants.apiBaseUrl,
@@ -44,11 +54,26 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     _animController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
+
+    _bgController = AnimationController(vsync: this, duration: const Duration(seconds: 18))..repeat();
+    _bgAnim = CurvedAnimation(parent: _bgController, curve: Curves.linear);
+    _pulseController = AnimationController(vsync: this, duration: const Duration(seconds: 4))
+      ..repeat(reverse: true);
+
+    // Repaint so the focus ring follows the caret.
+    for (final f in [
+      _usernameFocus, _nameFocus, _emailFocus,
+      _phoneFocus, _ageFocus, _passwordFocus, _confirmFocus,
+    ]) {
+      f.addListener(() => setState(() {}));
+    }
   }
 
   @override
   void dispose() {
     _animController.dispose();
+    _bgController.dispose();
+    _pulseController.dispose();
     _usernameController.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -56,6 +81,13 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     _ageController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _usernameFocus.dispose();
+    _nameFocus.dispose();
+    _emailFocus.dispose();
+    _phoneFocus.dispose();
+    _ageFocus.dispose();
+    _passwordFocus.dispose();
+    _confirmFocus.dispose();
     super.dispose();
   }
 
@@ -165,349 +197,304 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
   @override
   Widget build(BuildContext context) {
-    final c = context.colors;
-    final isDark = context.isDark;
+    final size = MediaQuery.of(context).size;
 
-    return Scaffold(
-      backgroundColor: c.background,
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: Column(
-            children: [
-              // ─── Header ────────────────────────────────────────
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                decoration: BoxDecoration(
-                  color: c.surface,
-                  border: Border(bottom: BorderSide(color: c.border)),
-                ),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: () => context.pop(),
-                      child: Container(
-                        width: 40, height: 40,
-                        decoration: BoxDecoration(
-                          color: c.surfaceVariant,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: c.border),
-                        ),
-                        child: Icon(Icons.arrow_back_ios_new_rounded, color: c.textPrimary, size: 18),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        body: Stack(
+          children: [
+            AuthAnimatedBackground(
+              controller: _bgAnim,
+              pulseController: _pulseController,
+              size: size,
+            ),
+
+            // Back to login
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, right: 16),
+                  child: GestureDetector(
+                    onTap: () => context.pop(),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white.withOpacity(0.15)),
                       ),
+                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                     ),
-                    Expanded(
-                      child: Text(
-                        'حساب جديد',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: c.textPrimary),
-                      ),
-                    ),
-                    const SizedBox(width: 40),
-                  ],
+                  ),
                 ),
               ),
+            ),
 
-              // ─── Form ──────────────────────────────────────────
-              Expanded(
+            SafeArea(
+              child: FadeTransition(
+                opacity: _fadeAnim,
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Welcome tag
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: c.primaryLight,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: c.primary.withOpacity(0.2)),
-                          ),
-                          child: Text(
-                            'أهلاً بك في Dr Ray ✨',
-                            style: TextStyle(color: c.primary, fontSize: 13, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
+                  physics: const BouncingScrollPhysics(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SizedBox(height: size.height * 0.05),
 
-                      // ─── Error ─────────────────────────────────
-                      if (_errorMessage != null) ...[
-                        Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: c.errorBg,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: c.error.withOpacity(0.3)),
-                          ),
-                          child: Row(
+                        const AuthBrandHeader(
+                          tagline: 'أنشئ حسابك وابدأ أول حجز',
+                          logoSize: 72,
+                        ),
+
+                        SizedBox(height: size.height * 0.035),
+
+                        AuthGlassCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Icon(Icons.error_outline_rounded, color: c.error, size: 20),
-                              const SizedBox(width: 10),
-                              Expanded(child: Text(_errorMessage!,
-                                  style: TextStyle(color: c.error, fontSize: 13, height: 1.4))),
-                              GestureDetector(
-                                onTap: () => setState(() => _errorMessage = null),
-                                child: Icon(Icons.close_rounded, color: c.error, size: 18),
+                              const Text(
+                                'حساب جديد',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                  fontFamily: 'Cairo',
+                                ),
                               ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                      ],
+                              const SizedBox(height: 6),
+                              Text(
+                                'خطوة واحدة وتقدر تحجز ✨',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Colors.white.withOpacity(0.5),
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
+                              const SizedBox(height: 24),
 
-                      // ─── Fields ────────────────────────────────
-                      _buildField('اسم المستخدم', Icons.alternate_email_rounded, _usernameController,
-                          hint: 'مثال: ahmed_123', ltr: true, colors: c, errorKey: 'username'),
-                      const SizedBox(height: 16),
+                              if (_errorMessage != null) ...[
+                                AuthGlassErrorBanner(
+                                  message: _errorMessage!,
+                                  onClose: () => setState(() => _errorMessage = null),
+                                ),
+                                const SizedBox(height: 20),
+                              ],
 
-                      _buildField('الاسم بالكامل', Icons.person_outline_rounded, _nameController,
-                          hint: 'مثال: محمد أحمد', colors: c, errorKey: 'name'),
-                      const SizedBox(height: 16),
+                              AuthGlassInputField(
+                                controller: _usernameController,
+                                focusNode: _usernameFocus,
+                                isFocused: _usernameFocus.hasFocus,
+                                label: 'اسم المستخدم',
+                                hint: 'ahmed_123',
+                                icon: Icons.alternate_email_rounded,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.right,
+                                errorText: _fieldErrors['username'],
+                                onChanged: (_) => _clearFieldError('username'),
+                                onSubmitted: (_) => _nameFocus.requestFocus(),
+                              ),
+                              const SizedBox(height: 16),
 
-                      _buildField('البريد الإلكتروني', Icons.email_outlined, _emailController,
-                          hint: 'example@email.com', ltr: true,
-                          keyboardType: TextInputType.emailAddress, colors: c, errorKey: 'email'),
-                      const SizedBox(height: 16),
+                              AuthGlassInputField(
+                                controller: _nameController,
+                                focusNode: _nameFocus,
+                                isFocused: _nameFocus.hasFocus,
+                                label: 'الاسم بالكامل',
+                                hint: 'محمد أحمد',
+                                icon: Icons.person_outline_rounded,
+                                textAlign: TextAlign.right,
+                                errorText: _fieldErrors['name'],
+                                onChanged: (_) => _clearFieldError('name'),
+                                onSubmitted: (_) => _emailFocus.requestFocus(),
+                              ),
+                              const SizedBox(height: 16),
 
-                      _buildField('رقم الهاتف', Icons.phone_outlined, _phoneController,
-                          hint: 'مثال: 01012345678', ltr: true,
-                          keyboardType: TextInputType.phone, colors: c, errorKey: 'phone'),
-                      const SizedBox(height: 16),
+                              AuthGlassInputField(
+                                controller: _emailController,
+                                focusNode: _emailFocus,
+                                isFocused: _emailFocus.hasFocus,
+                                label: 'البريد الإلكتروني',
+                                hint: 'example@email.com',
+                                icon: Icons.email_outlined,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.right,
+                                keyboardType: TextInputType.emailAddress,
+                                errorText: _fieldErrors['email'],
+                                onChanged: (_) => _clearFieldError('email'),
+                                onSubmitted: (_) => _phoneFocus.requestFocus(),
+                              ),
+                              const SizedBox(height: 16),
 
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 1,
-                            child: _buildField('العمر', Icons.cake_outlined, _ageController,
-                                hint: 'مثال: 25', ltr: true,
-                                keyboardType: TextInputType.number, colors: c, errorKey: 'age'),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            flex: 1,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('الجنس', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: c.textSecondary)),
-                                const SizedBox(height: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  height: 50,
-                                  decoration: BoxDecoration(
-                                    color: c.surfaceVariant,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: c.border),
+                              AuthGlassInputField(
+                                controller: _phoneController,
+                                focusNode: _phoneFocus,
+                                isFocused: _phoneFocus.hasFocus,
+                                label: 'رقم الهاتف',
+                                hint: '01012345678',
+                                icon: Icons.phone_outlined,
+                                textDirection: TextDirection.ltr,
+                                textAlign: TextAlign.right,
+                                keyboardType: TextInputType.phone,
+                                errorText: _fieldErrors['phone'],
+                                onChanged: (_) => _clearFieldError('phone'),
+                                onSubmitted: (_) => _ageFocus.requestFocus(),
+                              ),
+                              const SizedBox(height: 16),
+
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: AuthGlassInputField(
+                                      controller: _ageController,
+                                      focusNode: _ageFocus,
+                                      isFocused: _ageFocus.hasFocus,
+                                      label: 'العمر',
+                                      hint: '25',
+                                      icon: Icons.cake_outlined,
+                                      textDirection: TextDirection.ltr,
+                                      textAlign: TextAlign.right,
+                                      keyboardType: TextInputType.number,
+                                      errorText: _fieldErrors['age'],
+                                      onChanged: (_) => _clearFieldError('age'),
+                                    ),
                                   ),
-                                  child: DropdownButtonHideUnderline(
-                                    child: DropdownButton<String>(
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: AuthGlassDropdown<String>(
+                                      label: 'الجنس',
+                                      icon: Icons.wc_rounded,
                                       value: _selectedGender,
-                                      isExpanded: true,
-                                      dropdownColor: c.surfaceElevated,
-                                      style: TextStyle(fontFamily: 'Cairo', fontSize: 14, color: c.textPrimary),
-                                      icon: Icon(Icons.keyboard_arrow_down_rounded, color: c.textMuted),
-                                      onChanged: (v) { if (v != null) setState(() => _selectedGender = v); },
                                       items: const [
                                         DropdownMenuItem(value: 'male', child: Text('ذكر')),
                                         DropdownMenuItem(value: 'female', child: Text('أنثى')),
                                       ],
+                                      onChanged: (v) {
+                                        if (v != null) setState(() => _selectedGender = v);
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+
+                              AuthGlassInputField(
+                                controller: _passwordController,
+                                focusNode: _passwordFocus,
+                                isFocused: _passwordFocus.hasFocus,
+                                label: 'كلمة المرور',
+                                hint: '••••••••',
+                                icon: Icons.lock_outline_rounded,
+                                obscureText: !_passwordVisible,
+                                errorText: _fieldErrors['password'],
+                                onChanged: (_) => _clearFieldError('password'),
+                                onSubmitted: (_) => _confirmFocus.requestFocus(),
+                                suffixWidget: GestureDetector(
+                                  onTap: () => setState(() => _passwordVisible = !_passwordVisible),
+                                  child: Icon(
+                                    _passwordVisible
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: Colors.white.withOpacity(0.4),
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                              if (_fieldErrors['password'] == null) ...[
+                                const SizedBox(height: 6),
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Text(
+                                    '6 أحرف على الأقل',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white.withOpacity(0.35),
+                                      fontFamily: 'Cairo',
                                     ),
                                   ),
                                 ),
                               ],
-                            ),
+                              const SizedBox(height: 16),
+
+                              AuthGlassInputField(
+                                controller: _confirmPasswordController,
+                                focusNode: _confirmFocus,
+                                isFocused: _confirmFocus.hasFocus,
+                                label: 'تأكيد كلمة المرور',
+                                hint: '••••••••',
+                                icon: Icons.lock_reset_rounded,
+                                obscureText: !_confirmPasswordVisible,
+                                errorText: _fieldErrors['confirm'],
+                                onChanged: (_) => _clearFieldError('confirm'),
+                                onSubmitted: (_) => _handleRegister(),
+                                suffixWidget: GestureDetector(
+                                  onTap: () => setState(
+                                      () => _confirmPasswordVisible = !_confirmPasswordVisible),
+                                  child: Icon(
+                                    _confirmPasswordVisible
+                                        ? Icons.visibility_off_outlined
+                                        : Icons.visibility_outlined,
+                                    color: Colors.white.withOpacity(0.4),
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 28),
+
+                              AuthGlowButton(
+                                label: 'إنشاء الحساب',
+                                isLoading: _isLoading,
+                                onTap: _handleRegister,
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
+                        ),
 
-                      _buildPasswordField('كلمة المرور', _passwordController, _passwordVisible,
-                          () => setState(() => _passwordVisible = !_passwordVisible), colors: c, errorKey: 'password'),
-                      const SizedBox(height: 4),
-                      Text('6 أحرف على الأقل', style: TextStyle(fontSize: 11, color: c.textMuted)),
-                      const SizedBox(height: 16),
+                        const SizedBox(height: 24),
 
-                      _buildPasswordField('تأكيد كلمة المرور', _confirmPasswordController, _confirmPasswordVisible,
-                          () => setState(() => _confirmPasswordVisible = !_confirmPasswordVisible), colors: c, errorKey: 'confirm'),
-                      const SizedBox(height: 28),
-
-                      // ─── Register Button ────────────────────────
-                      _SolidButton(
-                        label: 'إنشاء الحساب والدخول',
-                        isLoading: _isLoading,
-                        primary: c.primary,
-                        onTap: _handleRegister,
-                      ),
-                      const SizedBox(height: 20),
-
-                      // ─── Login Link ─────────────────────────────
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('لديك حساب بالفعل؟',
-                              style: TextStyle(color: c.textSecondary, fontSize: 14)),
-                          TextButton(
-                            onPressed: () => context.pop(),
-                            child: Text(
-                              'تسجيل الدخول',
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c.primary),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'لديك حساب بالفعل؟',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: Colors.white.withOpacity(0.5),
+                                fontFamily: 'Cairo',
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                    ],
+                            TextButton(
+                              onPressed: () => context.pop(),
+                              child: const Text(
+                                'تسجيل الدخول',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: kAuthMint,
+                                  fontWeight: FontWeight.w700,
+                                  fontFamily: 'Cairo',
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 28),
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// Small red message rendered directly under a field.
-  Widget _fieldError(String? msg, AppColorTokens colors) {
-    if (msg == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 6, right: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.error_outline_rounded, size: 14, color: colors.error),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(msg,
-                style: TextStyle(fontSize: 11.5, color: colors.error, fontFamily: 'Cairo', height: 1.4)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildField(
-    String label,
-    IconData icon,
-    TextEditingController ctrl, {
-    String? hint,
-    bool ltr = false,
-    TextInputType? keyboardType,
-    required AppColorTokens colors,
-    String? errorKey,
-  }) {
-    final err = errorKey == null ? null : _fieldErrors[errorKey];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textSecondary)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: ctrl,
-          textDirection: ltr ? TextDirection.ltr : TextDirection.rtl,
-          textAlign: TextAlign.right,
-          autocorrect: false,
-          keyboardType: keyboardType,
-          style: TextStyle(color: colors.textPrimary),
-          onChanged: errorKey == null ? null : (_) => _clearFieldError(errorKey),
-          decoration: InputDecoration(
-            prefixIcon: Icon(icon),
-            hintText: hint,
-            enabledBorder: err == null
-                ? null
-                : OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colors.error, width: 1.4),
-                  ),
-          ),
-        ),
-        _fieldError(err, colors),
-      ],
-    );
-  }
-
-  Widget _buildPasswordField(
-    String label,
-    TextEditingController ctrl,
-    bool visible,
-    VoidCallback toggle, {
-    required AppColorTokens colors,
-    String? errorKey,
-  }) {
-    final err = errorKey == null ? null : _fieldErrors[errorKey];
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: colors.textSecondary)),
-        const SizedBox(height: 8),
-        TextField(
-          controller: ctrl,
-          obscureText: !visible,
-          textDirection: TextDirection.ltr,
-          style: TextStyle(color: colors.textPrimary),
-          onChanged: errorKey == null ? null : (_) => _clearFieldError(errorKey),
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.lock_outline_rounded),
-            hintText: '••••••••',
-            enabledBorder: err == null
-                ? null
-                : OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: colors.error, width: 1.4),
-                  ),
-            suffixIcon: IconButton(
-              icon: Icon(
-                visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                color: colors.textMuted, size: 20,
-              ),
-              onPressed: toggle,
             ),
-          ),
-        ),
-        _fieldError(err, colors),
-      ],
-    );
-  }
-}
-
-// ── Solid Teal Button ───────────────────────────────────────────
-class _SolidButton extends StatefulWidget {
-  final String label;
-  final bool isLoading;
-  final Color primary;
-  final VoidCallback onTap;
-  const _SolidButton({required this.label, required this.isLoading, required this.primary, required this.onTap});
-  @override State<_SolidButton> createState() => _SolidButtonState();
-}
-
-class _SolidButtonState extends State<_SolidButton> {
-  bool _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: widget.isLoading ? null : widget.onTap,
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) => setState(() => _pressed = false),
-      onTapCancel: () => setState(() => _pressed = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 120),
-        height: 54,
-        decoration: BoxDecoration(
-          color: widget.isLoading
-              ? widget.primary.withOpacity(0.6)
-              : _pressed ? widget.primary.withOpacity(0.85) : widget.primary,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: widget.isLoading ? [] : [
-            BoxShadow(color: widget.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4)),
           ],
-        ),
-        child: Center(
-          child: widget.isLoading
-              ? const SizedBox(height: 22, width: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
-              : Text(widget.label,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700, fontFamily: 'Cairo')),
         ),
       ),
     );
