@@ -11,6 +11,7 @@ import '../features/profile/saved_patients_screen.dart';
 import '../features/profile/saved_addresses_screen.dart';
 import '../features/profile/complaints_list_screen.dart';
 import '../features/notifications/notifications_screen.dart';
+import '../features/chat/order_chat_screen.dart';
 import 'package:dr_ray/core/services/storage_service.dart';
 import 'package:dr_ray/core/services/notification_service.dart';
 
@@ -72,6 +73,16 @@ final GoRouter appRouter = GoRouter(
         final orderId = state.pathParameters['orderId']!;
         final fromWizard = state.uri.queryParameters['fromWizard'] == 'true';
         return OrderDetailScreen(orderId: orderId, fromWizard: fromWizard);
+      },
+    ),
+    GoRoute(
+      path: '/orders/:orderId/chat',
+      builder: (BuildContext context, GoRouterState state) {
+        final orderId = state.pathParameters['orderId']!;
+        return OrderChatScreen(
+          orderId: orderId,
+          orderNumber: state.uri.queryParameters['orderNumber'],
+        );
       },
     ),
     GoRoute(

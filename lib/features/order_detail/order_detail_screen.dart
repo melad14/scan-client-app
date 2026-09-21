@@ -8,6 +8,7 @@ import 'package:dr_ray/core/theme/app_colors.dart';
 import 'package:dr_ray/core/theme/ui_components.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
+import 'package:url_launcher/url_launcher.dart';
 
 class OrderDetailScreen extends StatefulWidget {
   final String orderId;
@@ -45,6 +46,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     _reviewController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _callTechnician(String phone) async {
+    final number = phone.trim();
+    if (number.isEmpty) {
+      AppSnackBar.show(context, message: 'رقم هاتف الفني غير متاح', type: SnackType.error);
+      return;
+    }
+    try {
+      if (!await launchUrl(Uri.parse('tel:$number'), mode: LaunchMode.externalApplication)) {
+        throw Exception('launch failed');
+      }
+    } catch (_) {
+      if (mounted) {
+        AppSnackBar.show(context, message: 'تعذر فتح تطبيق الاتصال', type: SnackType.error);
+      }
+    }
   }
 
   Future<void> _fetchDetails() async {
@@ -577,6 +595,44 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       Text('${order.technician!.rating}',
                           style: TextStyle(fontWeight: FontWeight.w700, fontFamily: 'Inter', color: c.textPrimary)),
                     ]),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                // Contact the technician: message thread + direct call
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: c.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => context.push(
+                          '/orders/${widget.orderId}/chat?orderNumber=${Uri.encodeComponent(order.orderNumber)}',
+                        ),
+                        icon: const Icon(Icons.forum_rounded, size: 17),
+                        label: const Text('مراسلة الفني',
+                            style: TextStyle(fontFamily: 'Cairo', fontSize: 12.5, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: c.primary,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          side: BorderSide(color: c.primary.withOpacity(0.5)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () => _callTechnician(order.technician!.phone),
+                        icon: const Icon(Icons.phone_rounded, size: 17),
+                        label: const Text('اتصال',
+                            style: TextStyle(fontFamily: 'Cairo', fontSize: 12.5, fontWeight: FontWeight.bold)),
+                      ),
+                    ),
                   ],
                 ),
               ],

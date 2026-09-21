@@ -84,7 +84,10 @@ class NotificationService {
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         // Tapped a foreground local notification → navigate
         if (response.payload != null && response.payload!.isNotEmpty) {
-          _handleNotificationTap({'orderId': response.payload, 'type': 'local'});
+          final parts = response.payload!.split('|');
+          final type = parts.isNotEmpty ? parts[0] : '';
+          final orderId = parts.length > 1 ? parts[1] : response.payload!;
+          _handleNotificationTap({'orderId': orderId, 'type': type});
         }
       },
     );
@@ -102,6 +105,7 @@ class NotificationService {
     if (notification == null) return;
 
     final orderId = message.data['orderId'] ?? '';
+    final type = message.data['type'] ?? '';
 
     _localNotifications.show(
       id: (message.messageId ?? '').hashCode,
@@ -119,8 +123,8 @@ class NotificationService {
           enableVibration: true,
         ),
       ),
-      // Pass orderId as payload so tapping navigates correctly
-      payload: orderId,
+      // Carry the type too, so a foreground tap can reach the right screen
+      payload: '$type|$orderId',
     );
   }
 
@@ -139,9 +143,11 @@ class NotificationService {
     if (context == null) return;
 
     if (orderId != null && orderId.isNotEmpty) {
+      final type = data['type']?.toString() ?? '';
+      final target = type == 'new_message' ? '/orders/$orderId/chat' : '/orders/$orderId';
       final currentRoute = GoRouterState.of(context).matchedLocation;
-      if (currentRoute != '/orders/$orderId') {
-        GoRouter.of(context).push('/orders/$orderId');
+      if (currentRoute != target) {
+        GoRouter.of(context).push(target);
       }
     } else {
       GoRouter.of(context).go('/');
