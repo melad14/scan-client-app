@@ -5,6 +5,7 @@ import 'package:dr_ray/core/utils/constants.dart';
 import 'package:dr_ray/core/services/storage_service.dart';
 import 'package:dr_ray/core/services/notification_service.dart';
 import 'package:dr_ray/core/theme/app_colors.dart';
+import 'package:dr_ray/core/utils/validators.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -58,27 +59,46 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     super.dispose();
   }
 
-  bool _isValidEmail(String email) => RegExp(r'^\S+@\S+\.\S+$').hasMatch(email);
-  bool _isValidUsername(String u) => RegExp(r'^[a-zA-Z0-9_]{3,}$').hasMatch(u);
+  /// Per-field errors, shown under the field they belong to.
+  final Map<String, String?> _fieldErrors = {};
+
+  void _clearFieldError(String key) {
+    if (_fieldErrors[key] != null) setState(() => _fieldErrors[key] = null);
+  }
+
+  /// Fills [_fieldErrors] and returns true when every field is valid.
+  /// All fields are checked at once so the user sees everything that is wrong.
+  bool _validateAll() {
+    final password = _passwordController.text;
+    final errors = <String, String?>{
+      'username': validateUsername(_usernameController.text),
+      'name': validateFullName(_nameController.text),
+      'email': validateEmail(_emailController.text),
+      'phone': validateEgyptPhone(_phoneController.text),
+      'age': validateAge(_ageController.text),
+      'password': validatePassword(password),
+      'confirm': password != _confirmPasswordController.text
+          ? 'كلمتا المرور غير متطابقتين'
+          : null,
+    };
+    setState(() {
+      _fieldErrors
+        ..clear()
+        ..addAll(errors);
+      _errorMessage = null;
+    });
+    return errors.values.every((e) => e == null);
+  }
 
   Future<void> _handleRegister() async {
+    if (!_validateAll()) return;
+
     final username = _usernameController.text.trim();
     final name     = _nameController.text.trim();
     final email    = _emailController.text.trim();
-    final phone    = _phoneController.text.trim();
+    final phone    = normaliseEgyptPhone(_phoneController.text);
     final age      = _ageController.text.trim();
     final password = _passwordController.text.trim();
-    final confirm  = _confirmPasswordController.text.trim();
-
-    if (username.isEmpty)                      { setState(() => _errorMessage = 'اسم المستخدم مطلوب'); return; }
-    if (!_isValidUsername(username))           { setState(() => _errorMessage = 'اسم المستخدم: حروف وأرقام فقط، 3 أحرف كحد أدنى'); return; }
-    if (name.isEmpty)                          { setState(() => _errorMessage = 'الاسم بالكامل مطلوب'); return; }
-    if (email.isEmpty || !_isValidEmail(email)){ setState(() => _errorMessage = 'يرجى إدخال بريد إلكتروني صحيح'); return; }
-    if (phone.isEmpty)                         { setState(() => _errorMessage = 'رقم الهاتف مطلوب'); return; }
-    if (age.isEmpty)                           { setState(() => _errorMessage = 'العمر مطلوب'); return; }
-    if (int.tryParse(age) == null)             { setState(() => _errorMessage = 'يرجى إدخال عمر صحيح'); return; }
-    if (password.length < 6)                   { setState(() => _errorMessage = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل'); return; }
-    if (password != confirm)                   { setState(() => _errorMessage = 'كلمتا المرور غير متطابقتين'); return; }
 
     setState(() { _isLoading = true; _errorMessage = null; });
 
@@ -115,7 +135,22 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           e.type == DioExceptionType.connectionError) {
         setState(() => _errorMessage = 'تعذر الاتصال بالخادم. تحقق من اتصالك بالإنترنت.');
       } else if (statusCode == 400 && serverMsg != null) {
-        setState(() => _errorMessage = serverMsg);
+        // Put "already registered" errors under the field they belong to
+        // instead of a generic banner the user has to map themselves.
+        final key = serverMsg.contains('اسم المستخدم')
+            ? 'username'
+            : serverMsg.contains('البريد')
+                ? 'email'
+                : serverMsg.contains('هاتف')
+                    ? 'phone'
+                    : null;
+        setState(() {
+          if (key != null) {
+            _fieldErrors[key] = serverMsg;
+          } else {
+            _errorMessage = serverMsg;
+          }
+        });
       } else if (statusCode == 429) {
         setState(() => _errorMessage = 'محاولات كثيرة. انتظر قليلاً وحاول مرة أخرى.');
       } else {
@@ -224,21 +259,21 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
 
                       // ─── Fields ────────────────────────────────
                       _buildField('اسم المستخدم', Icons.alternate_email_rounded, _usernameController,
-                          hint: 'مثال: ahmed_123', ltr: true, colors: c),
+                          hint: 'مثال: ahmed_123', ltr: true, colors: c, errorKey: 'username'),
                       const SizedBox(height: 16),
 
                       _buildField('الاسم بالكامل', Icons.person_outline_rounded, _nameController,
-                          hint: 'مثال: محمد أحمد', colors: c),
+                          hint: 'مثال: محمد أحمد', colors: c, errorKey: 'name'),
                       const SizedBox(height: 16),
 
                       _buildField('البريد الإلكتروني', Icons.email_outlined, _emailController,
                           hint: 'example@email.com', ltr: true,
-                          keyboardType: TextInputType.emailAddress, colors: c),
+                          keyboardType: TextInputType.emailAddress, colors: c, errorKey: 'email'),
                       const SizedBox(height: 16),
 
                       _buildField('رقم الهاتف', Icons.phone_outlined, _phoneController,
                           hint: 'مثال: 01012345678', ltr: true,
-                          keyboardType: TextInputType.phone, colors: c),
+                          keyboardType: TextInputType.phone, colors: c, errorKey: 'phone'),
                       const SizedBox(height: 16),
 
                       Row(
@@ -247,7 +282,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                             flex: 1,
                             child: _buildField('العمر', Icons.cake_outlined, _ageController,
                                 hint: 'مثال: 25', ltr: true,
-                                keyboardType: TextInputType.number, colors: c),
+                                keyboardType: TextInputType.number, colors: c, errorKey: 'age'),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
@@ -288,13 +323,13 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
                       const SizedBox(height: 16),
 
                       _buildPasswordField('كلمة المرور', _passwordController, _passwordVisible,
-                          () => setState(() => _passwordVisible = !_passwordVisible), colors: c),
+                          () => setState(() => _passwordVisible = !_passwordVisible), colors: c, errorKey: 'password'),
                       const SizedBox(height: 4),
                       Text('6 أحرف على الأقل', style: TextStyle(fontSize: 11, color: c.textMuted)),
                       const SizedBox(height: 16),
 
                       _buildPasswordField('تأكيد كلمة المرور', _confirmPasswordController, _confirmPasswordVisible,
-                          () => setState(() => _confirmPasswordVisible = !_confirmPasswordVisible), colors: c),
+                          () => setState(() => _confirmPasswordVisible = !_confirmPasswordVisible), colors: c, errorKey: 'confirm'),
                       const SizedBox(height: 28),
 
                       // ─── Register Button ────────────────────────
@@ -332,6 +367,25 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     );
   }
 
+  /// Small red message rendered directly under a field.
+  Widget _fieldError(String? msg, AppColorTokens colors) {
+    if (msg == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, right: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.error_outline_rounded, size: 14, color: colors.error),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(msg,
+                style: TextStyle(fontSize: 11.5, color: colors.error, fontFamily: 'Cairo', height: 1.4)),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildField(
     String label,
     IconData icon,
@@ -340,7 +394,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     bool ltr = false,
     TextInputType? keyboardType,
     required AppColorTokens colors,
+    String? errorKey,
   }) {
+    final err = errorKey == null ? null : _fieldErrors[errorKey];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -353,8 +409,19 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           autocorrect: false,
           keyboardType: keyboardType,
           style: TextStyle(color: colors.textPrimary),
-          decoration: InputDecoration(prefixIcon: Icon(icon), hintText: hint),
+          onChanged: errorKey == null ? null : (_) => _clearFieldError(errorKey),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon),
+            hintText: hint,
+            enabledBorder: err == null
+                ? null
+                : OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: colors.error, width: 1.4),
+                  ),
+          ),
         ),
+        _fieldError(err, colors),
       ],
     );
   }
@@ -365,7 +432,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     bool visible,
     VoidCallback toggle, {
     required AppColorTokens colors,
+    String? errorKey,
   }) {
+    final err = errorKey == null ? null : _fieldErrors[errorKey];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -376,9 +445,16 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           obscureText: !visible,
           textDirection: TextDirection.ltr,
           style: TextStyle(color: colors.textPrimary),
+          onChanged: errorKey == null ? null : (_) => _clearFieldError(errorKey),
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.lock_outline_rounded),
             hintText: '••••••••',
+            enabledBorder: err == null
+                ? null
+                : OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: colors.error, width: 1.4),
+                  ),
             suffixIcon: IconButton(
               icon: Icon(
                 visible ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -388,6 +464,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
             ),
           ),
         ),
+        _fieldError(err, colors),
       ],
     );
   }

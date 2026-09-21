@@ -620,7 +620,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with TickerProviderStat
                     const SizedBox(width: 12),
                     Expanded(child: Text(
                       'الأسعار تظهر قبل التأكيد. الدفع عند الزيارة نقداً.',
-                      style: TextStyle(fontSize: 13, color: c.primaryDeep, height: 1.6),
+                      style: TextStyle(fontSize: 13, color: c.onPrimaryTint, height: 1.6),
                     )),
                   ],
                 ),

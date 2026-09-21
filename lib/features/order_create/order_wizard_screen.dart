@@ -6,6 +6,8 @@ import 'package:dr_ray/core/models/saved_patient.dart';
 import 'package:dr_ray/core/models/saved_address.dart';
 import 'package:dr_ray/core/models/category.dart';
 import 'package:dr_ray/core/utils/constants.dart';
+import 'package:dr_ray/core/utils/patient_relationship.dart';
+import 'package:dr_ray/core/utils/validators.dart';
 import 'package:dr_ray/core/utils/app_snackbar.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -63,7 +65,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
 
   // Pricing calculations
   double _servicesTotal = 0.0;
-  double _transferFee = 100.0;
+  // Mirrors of the server's PricingConfig — overwritten by /services/pricing.
+  double _transferFee = 0.0;
+  double _emergencySurcharge = 0.0;
   double _emergencyFee = 0.0;
   double _grandTotal = 0.0;
 
@@ -87,6 +91,19 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
       
       // 3. Fetch saved addresses
       final addressesRes = await _api.dio.get(Constants.savedAddresses);
+
+      // 3b. Fetch the authoritative fee config so the quote we show the patient
+      //     matches what the server will charge.
+      try {
+        final pricingRes = await _api.dio.get(Constants.servicesPricing);
+        final p = pricingRes.data['data'];
+        if (p is Map) {
+          _transferFee = (p['transferFeeBase'] as num?)?.toDouble() ?? _transferFee;
+          _emergencySurcharge = (p['emergencySurcharge'] as num?)?.toDouble() ?? _emergencySurcharge;
+        }
+      } catch (e) {
+        debugPrint('Error fetching pricing config: $e');
+      }
 
       // 4. Fetch categories list dynamically to extract meta
       ServiceCategory? matchedCategory;
@@ -181,6 +198,10 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     });
   }
 
+  /// 500.0 -> "500", 62.5 -> "62.5"
+  String _fmtMoney(double v) =>
+      v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
+
   void _calculatePriceDetails() {
     double servicesSum = 0.0;
     if (widget.category != 'prescription_only') {
@@ -189,15 +210,14 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
         servicesSum += s.price;
       }
     }
-    
-    // Simulate pricing parameters
-    double transfer = 150.0;
-    double emergency = _isEmergency ? 150.0 : 0.0;
 
+    // Fees come from the server's PricingConfig (fetched in _fetchInitialData).
+    // They must never be hardcoded here — the server recalculates the order
+    // total independently, and any difference would show the patient one price
+    // and charge another.
     setState(() {
       _servicesTotal = servicesSum;
-      _transferFee = transfer;
-      _emergencyFee = emergency;
+      _emergencyFee = _isEmergency ? _emergencySurcharge : 0.0;
       _grandTotal = _servicesTotal + _transferFee + _emergencyFee;
     });
   }
@@ -553,13 +573,60 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     });
   }
 
-  void _showAddPatientSheet() {
+  Future<void> _confirmDeletePatient(SavedPatient p) async {
     final c = context.colors;
-    final nameController = TextEditingController();
-    final phoneController = TextEditingController();
-    final ageController = TextEditingController();
-    String gender = 'male';
-    String relationship = 'spouse';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('حذف المريض', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold)),
+        content: Text('سيتم حذف "${p.name}" من قائمة المرضى المحفوظين. الطلبات السابقة لن تتأثر.',
+            style: const TextStyle(fontFamily: 'Cairo', height: 1.6)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء', style: TextStyle(fontFamily: 'Cairo'))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text('حذف', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.w700, color: c.error)),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      await _api.dio.delete('${Constants.savedPatients}/${p.id}');
+      final patientsRes = await _api.dio.get(Constants.savedPatients);
+      final List patientList = patientsRes.data['data'] ?? [];
+      setState(() {
+        _savedPatientsList = patientList.map((item) => SavedPatient.fromJson(item)).toList();
+        // Re-point the selection if we just deleted the selected patient.
+        if (_selectedPatient?.id == p.id) {
+          _selectedPatient = _savedPatientsList.isEmpty ? null : _savedPatientsList.first;
+          if (_selectedPatient != null) _applyPatientDefaults(_selectedPatient!);
+        }
+      });
+    } on DioException catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = e.response?.data?['message'] ?? 'تعذر حذف المريض.');
+      }
+    } catch (_) {
+      if (mounted) setState(() => _errorMessage = 'تعذر حذف المريض. حاول مرة أخرى.');
+    }
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  /// Add a new patient, or edit [existing] in place.
+  void _showAddPatientSheet({SavedPatient? existing}) {
+    final c = context.colors;
+    final isEdit = existing != null;
+    final nameController = TextEditingController(text: existing?.name ?? '');
+    final phoneController = TextEditingController(text: existing?.phone ?? '');
+    final ageController = TextEditingController(text: existing != null ? '${existing.age}' : '');
+    String gender = existing?.gender ?? 'male';
+    // 'self' isn't offered in the dropdown — keep it if that's what this is.
+    String relationship = existing?.relationship ?? 'spouse';
+    final Map<String, String?> errors = {};
 
     showModalBottomSheet(
       context: context,
@@ -581,34 +648,40 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('إضافة مريض جديد للفحص', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
+                    Text(isEdit ? 'تعديل بيانات المريض' : 'إضافة مريض جديد للفحص',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: c.textPrimary, fontFamily: 'Cairo')),
                     const SizedBox(height: 16),
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(labelText: 'اسم المريض بالكامل *'),
+                      onChanged: (_) { if (errors['name'] != null) setModalState(() => errors['name'] = null); },
+                      decoration: InputDecoration(labelText: 'اسم المريض بالكامل *', errorText: errors['name']),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: phoneController,
                       keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'رقم الهاتف للتواصل *'),
+                      onChanged: (_) { if (errors['phone'] != null) setModalState(() => errors['phone'] = null); },
+                      decoration: InputDecoration(
+                        labelText: 'رقم الهاتف للتواصل *',
+                        hintText: '01012345678',
+                        errorText: errors['phone'],
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: ageController,
                       keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'العمر *'),
+                      onChanged: (_) { if (errors['age'] != null) setModalState(() => errors['age'] = null); },
+                      decoration: InputDecoration(labelText: 'العمر *', errorText: errors['age']),
                     ),
                     const SizedBox(height: 12),
+                    // 'self' has no dropdown entry; show 'other' so the value is valid.
                     DropdownButtonFormField<String>(
-                      value: relationship,
+                      value: relationship == 'self' ? 'other' : relationship,
                       decoration: const InputDecoration(labelText: 'صلة القرابة *'),
-                      items: const [
-                        DropdownMenuItem(value: 'spouse', child: Text('الزوج / الزوجة')),
-                        DropdownMenuItem(value: 'parent', child: Text('الأب / الأم')),
-                        DropdownMenuItem(value: 'child', child: Text('الابن / الابنة')),
-                        DropdownMenuItem(value: 'sibling', child: Text('الأخ / الأخت')),
-                        DropdownMenuItem(value: 'other', child: Text('قريب / آخر')),
+                      items: [
+                        for (final o in relationshipOptions)
+                          DropdownMenuItem(value: o.key, child: Text(o.value)),
                       ],
                       onChanged: (val) => setModalState(() => relationship = val!),
                     ),
@@ -639,39 +712,54 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white),
                       onPressed: () async {
-                        if (nameController.text.trim().isEmpty ||
-                            phoneController.text.trim().isEmpty ||
-                            ageController.text.trim().isEmpty) {
+                        final found = <String, String?>{
+                          'name': validateFullName(nameController.text),
+                          'phone': validateEgyptPhone(phoneController.text),
+                          'age': validateAge(ageController.text),
+                        };
+                        if (found.values.any((e) => e != null)) {
+                          setModalState(() => errors
+                            ..clear()
+                            ..addAll(found));
                           return;
                         }
-                        
+
                         Navigator.pop(context);
                         setState(() => _isLoading = true);
                         try {
                           final payload = {
                             'label': nameController.text.trim().split(' ').first,
                             'name': nameController.text.trim(),
-                            'phone': phoneController.text.trim(),
+                            'phone': normaliseEgyptPhone(phoneController.text),
                             'age': int.parse(ageController.text.trim()),
                             'gender': gender,
                             'relationship': relationship
                           };
-                          final res = await _api.dio.post(Constants.savedPatients, data: payload);
-                          if (res.statusCode == 201) {
-                            final newPatient = SavedPatient.fromJson(res.data['data']);
+                          final res = isEdit
+                              ? await _api.dio.put('${Constants.savedPatients}/${existing.id}', data: payload)
+                              : await _api.dio.post(Constants.savedPatients, data: payload);
+                          if (res.statusCode == 200 || res.statusCode == 201) {
+                            final saved = SavedPatient.fromJson(res.data['data']);
                             final patientsRes = await _api.dio.get(Constants.savedPatients);
                             final List patientList = patientsRes.data['data'] ?? [];
-                            
+
                             setState(() {
                               _savedPatientsList = patientList.map((item) => SavedPatient.fromJson(item)).toList();
-                              _selectedPatient = _savedPatientsList.firstWhere((p) => p.id == newPatient.id, orElse: () => newPatient);
+                              _selectedPatient = _savedPatientsList.firstWhere((p) => p.id == saved.id, orElse: () => saved);
                               _applyPatientDefaults(_selectedPatient!);
                             });
                           }
-                        } catch (_) {}
+                        } on DioException catch (e) {
+                          if (mounted) {
+                            setState(() => _errorMessage =
+                                e.response?.data?['message'] ?? 'تعذر حفظ بيانات المريض. تحقق من اتصالك بالإنترنت.');
+                          }
+                        } catch (_) {
+                          if (mounted) setState(() => _errorMessage = 'تعذر حفظ بيانات المريض. حاول مرة أخرى.');
+                        }
                         setState(() => _isLoading = false);
                       },
-                      child: const Text('إضافة المريض'),
+                      child: Text(isEdit ? 'حفظ التعديلات' : 'إضافة المريض'),
                     ),
                     const SizedBox(height: 24),
                   ],
@@ -692,6 +780,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     final buildingController = TextEditingController();
     final floorController = TextEditingController();
     bool hasElevator = false;
+    // Per-field errors for this sheet — the submit button used to just
+    // return silently, so the user had no idea what was missing.
+    final Map<String, String?> errors = {};
 
     LatLng mapLatLng = const LatLng(30.0444, 31.2357);
 
@@ -813,17 +904,29 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: labelController,
-                      decoration: const InputDecoration(labelText: 'تسمية العنوان (البيت، الشغل...) *'),
+                      onChanged: (_) { if (errors['label'] != null) setModalState(() => errors['label'] = null); },
+                      decoration: InputDecoration(
+                        labelText: 'تسمية العنوان (البيت، الشغل...) *',
+                        errorText: errors['label'],
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: districtController,
-                      decoration: const InputDecoration(labelText: 'المنطقة / الحي *'),
+                      onChanged: (_) { if (errors['district'] != null) setModalState(() => errors['district'] = null); },
+                      decoration: InputDecoration(
+                        labelText: 'المنطقة / الحي *',
+                        errorText: errors['district'],
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: streetController,
-                      decoration: const InputDecoration(labelText: 'الشارع والبناية بالتفصيل *'),
+                      onChanged: (_) { if (errors['street'] != null) setModalState(() => errors['street'] = null); },
+                      decoration: InputDecoration(
+                        labelText: 'الشارع والبناية بالتفصيل *',
+                        errorText: errors['street'],
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -854,9 +957,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                     ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: c.primary, foregroundColor: Colors.white),
                       onPressed: () async {
-                        if (labelController.text.trim().isEmpty ||
-                            districtController.text.trim().isEmpty ||
-                            streetController.text.trim().isEmpty) {
+                        final found = <String, String?>{
+                          'label': validateRequired(labelController.text, 'تسمية العنوان'),
+                          'district': validateRequired(districtController.text, 'المنطقة / الحي'),
+                          'street': validateRequired(streetController.text, 'الشارع والبناية'),
+                        };
+                        if (found.values.any((e) => e != null)) {
+                          setModalState(() => errors
+                            ..clear()
+                            ..addAll(found));
                           return;
                         }
                         Navigator.pop(context);
@@ -883,7 +992,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                               _applyAddressDefaults(_selectedAddress!);
                             });
                           }
-                        } catch (_) {}
+                        } on DioException catch (e) {
+                          // Was swallowed silently — the address just never appeared.
+                          if (mounted) {
+                            setState(() => _errorMessage =
+                                e.response?.data?['message'] ?? 'تعذر حفظ العنوان. تحقق من اتصالك بالإنترنت.');
+                          }
+                        } catch (_) {
+                          if (mounted) setState(() => _errorMessage = 'تعذر حفظ العنوان. حاول مرة أخرى.');
+                        }
                         setState(() => _isLoading = false);
                       },
                       child: const Text('إضافة العنوان'),
@@ -1118,7 +1235,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
           )
         else
           SizedBox(
-            height: 110,
+            height: 138,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
@@ -1163,10 +1280,32 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                             if (isSelected) Icon(Icons.check_circle, size: 16, color: c.primary),
                           ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(p.name, style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo'), maxLines: 1, overflow: TextOverflow.ellipsis),
                         const SizedBox(height: 4),
-                        Text('${p.age} سنة · ${p.gender == 'male' ? 'ذكر' : 'أنثى'}', style: TextStyle(fontSize: 11, color: c.textMuted, fontFamily: 'Cairo')),
+                        Text(p.name, style: TextStyle(fontSize: 11, color: c.textSecondary, fontFamily: 'Cairo'), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        const SizedBox(height: 2),
+                        Text('${p.age} سنة · ${p.gender == 'male' ? 'ذكر' : 'أنثى'}', style: TextStyle(fontSize: 10, color: c.textMuted, fontFamily: 'Cairo')),
+                        const Spacer(),
+                        // Edit / delete without leaving the booking flow.
+                        // 'self' is the account owner's own profile — not removable here.
+                        Row(
+                          children: [
+                            _PatientCardAction(
+                              icon: Icons.edit_outlined,
+                              tooltip: 'تعديل',
+                              color: c.textSecondary,
+                              onTap: () => _showAddPatientSheet(existing: p),
+                            ),
+                            if (p.relationship != 'self') ...[
+                              const SizedBox(width: 4),
+                              _PatientCardAction(
+                                icon: Icons.delete_outline_rounded,
+                                tooltip: 'حذف',
+                                color: c.error,
+                                onTap: () => _confirmDeletePatient(p),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -1596,9 +1735,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 const Text('زيارة طوارئ عاجلة جداً ⚡', style: TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 13)),
               ],
             ),
-            subtitle: const Text(
-              'سعر الخدمة يزداد بمقدار 150 ج.م، ويتم توجيه أقرب فني إليك فوراً في غضون ساعة.',
-              style: TextStyle(fontFamily: 'Cairo', fontSize: 11),
+            subtitle: Text(
+              'سعر الخدمة يزداد بمقدار ${_fmtMoney(_emergencySurcharge)} ج.م، ويتم توجيه أقرب فني إليك فوراً في غضون ساعة.',
+              style: const TextStyle(fontFamily: 'Cairo', fontSize: 11),
             ),
             value: _isEmergency,
             activeColor: c.warning,
@@ -1682,7 +1821,9 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 Icons.person_pin,
                 'المريض:',
                 _selectedPatient?.name ?? 'غير محدد',
-                sub: 'العلاقة: ${_selectedPatient != null ? _selectedPatient!.label : ""}',
+                sub: _selectedPatient != null
+                    ? 'العلاقة: ${relationshipLabelAr(_selectedPatient!.relationship)}'
+                    : null,
               ),
               const Divider(height: 20),
               _buildSummaryRow(
@@ -1730,10 +1871,10 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                   children: [
                     _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', 'قيد المراجعة والتسعير'),
                     const SizedBox(height: 8),
-                    _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '$_transferFee ج.م'),
+                    _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '${_fmtMoney(_transferFee)} ج.م'),
                     if (_isEmergency) ...[
                       const SizedBox(height: 8),
-                      _buildPricingRow('رسوم خدمة طوارئ إضافية:', '$_emergencyFee ج.م'),
+                      _buildPricingRow('رسوم خدمة طوارئ إضافية:', '${_fmtMoney(_emergencyFee)} ج.م'),
                     ],
                     const Divider(height: 24, thickness: 1),
                     _buildPricingRow('إجمالي رسوم الدفع المستحقة:', 'قيد المراجعة والتسعير', isTotal: true),
@@ -1746,15 +1887,15 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 )
               : Column(
                   children: [
-                    _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', '$_servicesTotal ج.م'),
+                    _buildPricingRow('تكلفة الفحوصات الطبية المحددة:', '${_fmtMoney(_servicesTotal)} ج.م'),
                     const SizedBox(height: 8),
-                    _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '$_transferFee ج.م'),
+                    _buildPricingRow('رسوم انتقال الفريق الطبي للمنزل:', '${_fmtMoney(_transferFee)} ج.م'),
                     if (_isEmergency) ...[
                       const SizedBox(height: 8),
-                      _buildPricingRow('رسوم خدمة طوارئ إضافية:', '$_emergencyFee ج.م'),
+                      _buildPricingRow('رسوم خدمة طوارئ إضافية:', '${_fmtMoney(_emergencyFee)} ج.م'),
                     ],
                     const Divider(height: 24, thickness: 1),
-                    _buildPricingRow('إجمالي رسوم الدفع المستحقة:', '$_grandTotal ج.م', isTotal: true),
+                    _buildPricingRow('إجمالي رسوم الدفع المستحقة:', '${_fmtMoney(_grandTotal)} ج.م', isTotal: true),
                   ],
                 ),
         ),
@@ -1849,5 +1990,35 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
     _floorController.dispose();
     _notesController.dispose();
     super.dispose();
+  }
+}
+
+/// Small icon button used on the patient cards in step 1.
+class _PatientCardAction extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _PatientCardAction({
+    required this.icon,
+    required this.tooltip,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(4),
+          child: Icon(icon, size: 16, color: color),
+        ),
+      ),
+    );
   }
 }

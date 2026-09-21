@@ -13,6 +13,7 @@ class AppColorTokens {
   final Color primaryDark;     // Darker teal for hover/pressed
   final Color primaryDeep;     // Deepest teal for headers
   final Color primaryLight;    // 10% teal tint for icon backgrounds
+  final Color onPrimaryTint;   // text/icon colour ON a primaryLight background
 
   // ─── Accent ────────────────────────────────────────────────────
   final Color accent;          // Amber — CTAs like "احجز الآن"
@@ -58,6 +59,7 @@ class AppColorTokens {
     required this.primaryDark,
     required this.primaryDeep,
     required this.primaryLight,
+    required this.onPrimaryTint,
     required this.accent,
     required this.accentLight,
     required this.background,
@@ -147,6 +149,7 @@ class AppColors {
     primaryDark:   Color(0xFF16755A),
     primaryDeep:   Color(0xFF085041),
     primaryLight:  Color(0x1A1D9E75),   // ~10% teal
+    onPrimaryTint: Color(0xFF085041),   // deep teal — readable on the light tint
 
     // Accent (amber for CTAs)
     accent:        Color(0xFFD97B0A),
@@ -195,6 +198,7 @@ class AppColors {
     primaryDark:   Color(0xFF16755A),
     primaryDeep:   Color(0xFF085041),
     primaryLight:  Color(0x261D9E75),   // ~15% teal
+    onPrimaryTint: Color(0xFF7FE0BE),   // light mint — readable on the dark tint
 
     // Accent
     accent:        Color(0xFFD97B0A),
