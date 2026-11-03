@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:go_router/go_router.dart';
 import 'package:dr_ray/core/api/api_client.dart';
 import 'package:dr_ray/core/services/storage_service.dart';
@@ -165,10 +166,8 @@ class NotificationService {
   static final ValueNotifier<bool> notificationsBlocked =
       ValueNotifier<bool>(false);
 
-  /// Sent with error reports so the server log shows which build failed.
-  /// Keep in sync with `version:` in pubspec.yaml.
+  /// Sent with error reports so the server log shows which app failed.
   static const String _appTag = 'patient';
-  static const String _buildTag = '1.0.0+1';
 
   static Future<void>? _inFlight;
   static DateTime? _lastSuccess;
@@ -241,6 +240,15 @@ class NotificationService {
     }
   }
 
+  static Future<String> _buildTag() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      return '${info.version}+${info.buildNumber}';
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
   static Future<void> _reportError(
       String stage, Object? error, String permission) async {
     debugPrint('[NotificationService] $stage error: $error');
@@ -248,7 +256,7 @@ class NotificationService {
       if (await StorageService.getAccessToken() == null) return;
       await ApiClient().dio.post('/auth/fcm-token/error', data: {
         'app': _appTag,
-        'build': _buildTag,
+        'build': await _buildTag(),
         'platform': defaultTargetPlatform.name,
         'permission': permission,
         'stage': stage,

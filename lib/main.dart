@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:dr_ray/core/services/notification_service.dart';
+import 'package:dr_ray/core/services/update_service.dart';
 import 'package:dr_ray/core/services/socket_service.dart';
 import 'package:dr_ray/core/theme/app_theme.dart';
 import 'package:dr_ray/core/theme/theme_provider.dart';
@@ -28,6 +29,9 @@ void main() async {
       child: DrRayPatientApp(),
     ),
   );
+
+  // Ask the server whether a newer build was published (dashboard → Settings → App Updates)
+  UpdateService.start();
 }
 
 class DrRayPatientApp extends ConsumerWidget {
