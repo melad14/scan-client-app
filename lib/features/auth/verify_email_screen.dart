@@ -108,7 +108,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTicker
           await StorageService.saveUserRole('patient');
           await StorageService.saveUserData(data['user']);
 
-          await NotificationService.registerDeviceToken();
+          // Not awaited: registration retries on a bad network and must not block navigation.
+          NotificationService.registerDeviceToken();
         }
 
         if (mounted) {

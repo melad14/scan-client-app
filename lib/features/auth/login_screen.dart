@@ -95,7 +95,8 @@ class _LoginScreenState extends State<LoginScreen>
         await StorageService.saveRefreshToken(res.data['data']['refreshToken']);
         await StorageService.saveUserRole('patient');
         await StorageService.saveUserData(res.data['data']['user']);
-        await NotificationService.registerDeviceToken();
+        // Not awaited: registration retries on a bad network and must not block navigation.
+        NotificationService.registerDeviceToken();
         if (mounted) context.go('/');
       }
     } on DioException catch (e) {
