@@ -14,6 +14,7 @@ import 'package:dr_ray/core/utils/loading_overlay.dart';
 import 'package:dr_ray/core/theme/app_colors.dart';
 import 'package:dr_ray/core/theme/theme_provider.dart';
 import 'package:dr_ray/core/theme/ui_components.dart';
+import 'package:dr_ray/core/widgets/price_breakdown.dart';
 import 'package:dr_ray/features/profile/profile_screen.dart';
 import 'package:dio/dio.dart';
 
@@ -1281,6 +1282,26 @@ class _OrderCard extends StatefulWidget {
 class _OrderCardState extends State<_OrderCard> {
   bool _pressed = false;
 
+  /// One line under the card total, e.g. "فحوصات 2200 + انتقال 100"
+  String? _totalCaption(MedicalOrder order) {
+    final p = order.pricing;
+    if (p == null) return null;
+    if (order.needsPricing) return 'الفحوصات قيد التسعير';
+    final parts = <String>[];
+    final services = (p['servicesTotal'] as num?) ?? 0;
+    final transfer = (p['transferFee'] as num?) ?? 0;
+    final emergency = (p['emergencyFee'] as num?) ?? 0;
+    final discount = (p['discount'] as num?) ?? 0;
+    if (services > 0) parts.add('فحوصات ${fmtMoney(services)}');
+    if (transfer > 0) {
+      parts.add('${order.status == 'cancelled' ? 'رسوم إلغاء' : 'انتقال'} ${fmtMoney(transfer)}');
+    }
+    if (emergency > 0) parts.add('طوارئ ${fmtMoney(emergency)}');
+    if (parts.length < 2 && discount <= 0) return null; // nothing to explain
+    final line = parts.join(' + ');
+    return discount > 0 ? '$line − خصم ${fmtMoney(discount)}' : line;
+  }
+
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
@@ -1394,7 +1415,7 @@ class _OrderCardState extends State<_OrderCard> {
                             ]),
                             Row(children: [
                               Text(
-                                '${widget.order.pricing?['total'] ?? 0}',
+                                fmtMoney(widget.order.pricing?['total'] as num?),
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: c.accent,
@@ -1410,6 +1431,18 @@ class _OrderCardState extends State<_OrderCard> {
                             ]),
                           ],
                         ),
+                        // Say what the total is made of, so it isn't read as the tests' price alone
+                        if (_totalCaption(widget.order) != null)
+                          Align(
+                            alignment: AlignmentDirectional.centerEnd,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                _totalCaption(widget.order)!,
+                                style: TextStyle(fontSize: 10.5, color: c.textMuted),
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

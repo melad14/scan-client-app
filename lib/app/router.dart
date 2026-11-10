@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/login_screen.dart';
 import '../features/auth/register_screen.dart';
+import '../features/auth/forgot_password_screen.dart';
 import '../features/auth/verify_email_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/order_create/order_wizard_screen.dart';
@@ -23,7 +24,8 @@ final GoRouter appRouter = GoRouter(
     final token = await StorageService.getAccessToken();
     final isLoggingIn = state.matchedLocation == '/login' ||
         state.matchedLocation == '/register' ||
-        state.matchedLocation == '/verify-email';
+        state.matchedLocation == '/verify-email' ||
+        state.matchedLocation == '/forgot-password';
 
     if (token == null && !isLoggingIn) {
       return '/login';
@@ -43,6 +45,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/register',
       builder: (BuildContext context, GoRouterState state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (BuildContext context, GoRouterState state) => ForgotPasswordScreen(
+        initialIdentifier: state.extra is String ? state.extra as String : null,
+      ),
     ),
     GoRoute(
       path: '/verify-email',

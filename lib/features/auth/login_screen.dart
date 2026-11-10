@@ -305,7 +305,29 @@ class _LoginScreenState extends State<LoginScreen>
                                       ),
                                     ),
 
-                                    const SizedBox(height: 32),
+                                    // ── Forgot Password ──────────
+                                    Align(
+                                      alignment: AlignmentDirectional.centerEnd,
+                                      child: TextButton(
+                                        onPressed: () => context.push('/forgot-password',
+                                            extra: _usernameController.text.trim()),
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: const Color(0xFF2DDBA4),
+                                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                        ),
+                                        child: const Text(
+                                          'نسيت كلمة المرور؟',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: Color(0xFF2DDBA4),
+                                            fontFamily: 'Cairo',
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
+                                    const SizedBox(height: 16),
 
                                     // ── Login Button ─────────────
                                     _GlowButton(

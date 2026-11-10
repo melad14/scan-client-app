@@ -1513,7 +1513,7 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
                 ),
                 child: CheckboxListTile(
                   title: Text(service.nameAr, style: const TextStyle(fontFamily: 'Cairo', fontWeight: FontWeight.bold, fontSize: 14)),
-                  subtitle: Text('${service.price} ج.م · ${service.description ?? ""}', style: TextStyle(fontFamily: 'Cairo', color: c.textSecondary, fontSize: 12)),
+                  subtitle: Text('${_fmtMoney(service.price)} ج.م · ${service.description ?? ""}', style: TextStyle(fontFamily: 'Cairo', color: c.textSecondary, fontSize: 12)),
                   value: isChecked,
                   activeColor: c.primary,
                   onChanged: (val) {

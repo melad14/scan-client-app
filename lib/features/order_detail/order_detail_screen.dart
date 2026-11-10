@@ -6,6 +6,7 @@ import 'package:dr_ray/core/utils/constants.dart';
 import 'package:dr_ray/core/utils/app_snackbar.dart';
 import 'package:dr_ray/core/theme/app_colors.dart';
 import 'package:dr_ray/core/theme/ui_components.dart';
+import 'package:dr_ray/core/widgets/price_breakdown.dart';
 import 'package:dio/dio.dart';
 import 'dart:async';
 import 'package:url_launcher/url_launcher.dart';
@@ -512,34 +513,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(icon: Icons.science_rounded, title: 'الفحوصات المطلوبة'),
+              _SectionTitle(icon: Icons.science_rounded, title: 'الفحوصات والتكلفة'),
               const SizedBox(height: 12),
-              ...order.services.map((s) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(children: [
-                      Container(width: 6, height: 6,
-                          decoration: BoxDecoration(color: c.primary, shape: BoxShape.circle)),
-                      const SizedBox(width: 8),
-                      Text(s.nameAr,
-                          style: TextStyle(fontSize: 14, color: c.textPrimary)),
-                    ]),
-                    Text('${s.price} ج.م',
-                        style: TextStyle(fontSize: 13, color: c.textSecondary, fontFamily: 'Inter')),
-                  ],
-                ),
-              )),
-              Container(height: 1, color: c.borderLight, margin: const EdgeInsets.symmetric(vertical: 12)),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('الإجمالي',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: c.textPrimary)),
-                  Text('${order.pricing?['total'] ?? 0} ج.م',
-                      style: TextStyle(fontWeight: FontWeight.w700, color: c.accent, fontSize: 17, fontFamily: 'Inter')),
-                ],
+              PriceBreakdown(
+                pricing: order.pricing,
+                services: order.services,
+                awaitingPricing: order.needsPricing,
+                cancelled: order.status == 'cancelled',
               ),
             ],
           ),
