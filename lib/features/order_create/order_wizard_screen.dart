@@ -1669,11 +1669,14 @@ class _OrderWizardScreenState extends State<OrderWizardScreen> {
             Expanded(
               child: GestureDetector(
                 onTap: () async {
+                  final now = DateTime.now();
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 14)),
+                    initialDate: (_scheduleDate == 'custom' && _customScheduleDate.isAfter(now))
+                        ? _customScheduleDate
+                        : now,
+                    firstDate: now,
+                    lastDate: now.add(const Duration(days: 60)),
                   );
                   if (picked != null) {
                     setState(() {

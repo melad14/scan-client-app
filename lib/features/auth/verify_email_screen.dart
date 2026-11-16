@@ -50,7 +50,62 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTicker
     _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeOut);
     _animController.forward();
 
+    // Enable smooth backspace navigation across empty OTP boxes
+    for (int i = 0; i < 6; i++) {
+      final index = i;
+      _focusNodes[index].onKeyEvent = (node, event) {
+        if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+          if (_controllers[index].text.isEmpty && index > 0) {
+            _focusNodes[index - 1].requestFocus();
+            _controllers[index - 1].clear();
+            setState(() {});
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      };
+    }
+
     _startResendTimer();
+  }
+
+  void _applyOtpString(String raw) {
+    final clean = raw.replaceAll(RegExp(r'\D'), '');
+    if (clean.isEmpty) return;
+
+    final chars = clean.split('');
+    for (int i = 0; i < 6; i++) {
+      if (i < chars.length) {
+        _controllers[i].text = chars[i];
+      } else {
+        _controllers[i].clear();
+      }
+    }
+
+    if (clean.length >= 6) {
+      for (final f in _focusNodes) {
+        f.unfocus();
+      }
+      _handleVerify();
+    } else {
+      _focusNodes[clean.length.clamp(0, 5)].requestFocus();
+    }
+    setState(() {});
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = data?.text ?? '';
+      final digits = text.replaceAll(RegExp(r'\D'), '');
+      if (digits.isNotEmpty) {
+        _applyOtpString(digits);
+      } else {
+        setState(() => _errorMessage = 'لا يوجد رمز تحقق صالح في الحافظة');
+      }
+    } catch (_) {
+      // Clipboard read might be blocked by browser permissions
+    }
   }
 
   @override
@@ -340,13 +395,15 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTicker
                                   focusNode: _focusNodes[index],
                                   keyboardType: TextInputType.number,
                                   textAlign: TextAlign.center,
-                                  maxLength: 1,
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: FontWeight.w800,
                                     color: c.textPrimary,
                                   ),
-                                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                  inputFormatters: [
+                                    FilteringTextInputFormatter.digitsOnly,
+                                    LengthLimitingTextInputFormatter(6),
+                                  ],
                                   decoration: InputDecoration(
                                     counterText: '',
                                     contentPadding: EdgeInsets.zero,
@@ -361,8 +418,26 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTicker
                                       borderSide: BorderSide(color: c.primary, width: 2),
                                     ),
                                   ),
+                                  onTap: () {
+                                    _controllers[index].selection = TextSelection(
+                                      baseOffset: 0,
+                                      extentOffset: _controllers[index].text.length,
+                                    );
+                                  },
                                   onChanged: (value) {
-                                    if (value.isNotEmpty) {
+                                    final clean = value.replaceAll(RegExp(r'\D'), '');
+
+                                    // If multi-digit code was pasted into this box
+                                    if (clean.length >= 2) {
+                                      _applyOtpString(clean);
+                                      return;
+                                    }
+
+                                    if (clean.isNotEmpty) {
+                                      _controllers[index].value = TextEditingValue(
+                                        text: clean,
+                                        selection: const TextSelection.collapsed(offset: 1),
+                                      );
                                       if (index < 5) {
                                         _focusNodes[index + 1].requestFocus();
                                       } else {
@@ -370,17 +445,42 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> with SingleTicker
                                         _handleVerify();
                                       }
                                     } else {
+                                      _controllers[index].clear();
                                       if (index > 0) {
                                         _focusNodes[index - 1].requestFocus();
                                       }
                                     }
+                                    setState(() {});
                                   },
                                 ),
                               );
                             }),
                           ),
                         ),
-                        const SizedBox(height: 36),
+                        const SizedBox(height: 14),
+
+                        // ─── Quick Paste Button ──────────────────────
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: _pasteFromClipboard,
+                            icon: Icon(Icons.content_paste_rounded, size: 16, color: c.primary),
+                            label: Text(
+                              'لصق الرمز',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: c.primary,
+                                fontFamily: 'Cairo',
+                              ),
+                            ),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                              backgroundColor: c.primary.withOpacity(0.08),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
 
                         // ─── Verify Button ──────────────────────────
                         GestureDetector(

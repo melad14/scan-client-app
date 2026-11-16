@@ -213,29 +213,6 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
               size: size,
             ),
 
-            // Back to login
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8, right: 16),
-                  child: GestureDetector(
-                    onTap: () => context.pop(),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.white.withOpacity(0.15)),
-                      ),
-                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
             SafeArea(
               child: FadeTransition(
                 opacity: _fadeAnim,
@@ -473,7 +450,7 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
                               ),
                             ),
                             TextButton(
-                              onPressed: () => context.pop(),
+                              onPressed: () => context.canPop() ? context.pop() : context.go('/login'),
                               child: const Text(
                                 'تسجيل الدخول',
                                 style: TextStyle(
@@ -489,6 +466,30 @@ class _RegisterScreenState extends State<RegisterScreen> with TickerProviderStat
 
                         const SizedBox(height: 28),
                       ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // Back button on top of the scroll view so it always receives taps
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, right: 16),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => context.canPop() ? context.pop() : context.go('/login'),
+                    child: Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.white.withOpacity(0.15)),
+                      ),
+                      child: const Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 20),
                     ),
                   ),
                 ),
